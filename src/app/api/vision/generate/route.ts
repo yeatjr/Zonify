@@ -4,7 +4,8 @@ import { buildImagePrompt, resolvePlaceScene } from '@/lib/vision';
 import fs from 'fs';
 import path from 'path';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const VISION_KEY = process.env.GEMINI_VISION_API_KEY || process.env.GEMINI_API_KEY || '';
+const genAI = new GoogleGenerativeAI(VISION_KEY);
 
 export async function POST(req: NextRequest) {
     try {
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
         let envAnalysis = null;
         if (streetView) {
             try {
-                const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${VISION_KEY}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
         let satelliteAnalysis = null;
         if (satellite) {
             try {
-                const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${VISION_KEY}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
         }
 
         const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=${process.env.GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=${VISION_KEY}`,
             { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(genBody) }
         );
 
@@ -143,6 +144,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
             success: true,
             visionUrl: visionUrl,
+            base64: base64Image,
             error: !visionUrl && base64Image ? "Local save failed - Check server logs" : null,
             analysis: { envAnalysis, satelliteAnalysis }
         });

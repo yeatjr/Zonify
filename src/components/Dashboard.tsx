@@ -9,11 +9,17 @@ import { useAuth } from '@/context/AuthContext';
 import { getImageSrc } from '@/lib/utils';
 
 interface DashboardProps {
+    isAnalysisMode?: boolean;
+    onStartAnalysis?: (active: boolean) => void;
     onSelectPin?: (pin: any) => void;
     className?: string;
+    analysisState?: 'idle' | 'running' | 'done';
+    onShowDetails?: () => void;
+    onShowHistory?: () => void;
+    hasHistory?: boolean;
 }
 
-export default function Dashboard({ onSelectPin, className }: DashboardProps) {
+export default function Dashboard({ isAnalysisMode = false, onStartAnalysis, onSelectPin, className, analysisState = 'idle', onShowDetails, onShowHistory, hasHistory }: DashboardProps) {
     const [recentPins, setRecentPins] = useState<any[]>([]);
     const { user, loginWithGoogle, logout } = useAuth();
 
@@ -29,9 +35,9 @@ export default function Dashboard({ onSelectPin, className }: DashboardProps) {
     }, []);
 
     return (
-        <div className={`absolute top-4 left-4 z-50 w-80 md:w-96 max-h-[calc(100vh-2rem)] flex flex-col gap-4 pointer-events-none ${className || ''}`}>
+        <div className={`absolute top-4 left-4 z-50 w-80 md:w-96 max-h-[calc(100vh-2rem)] flex flex-col gap-4 pointer-events-none overflow-y-auto custom-scrollbar pr-2 ${className || ''}`}>
 
-            {/* Header Widget - RESTORED TO ORIGINAL STYLE */}
+            {/* Header Widget */}
             <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -81,14 +87,14 @@ export default function Dashboard({ onSelectPin, className }: DashboardProps) {
                 </div>
             </motion.div>
 
-            {/* Recent Activity Widget - NOW IN MIDDLE */}
+            {/* Recent Activity Widget - Moved to 2nd position */}
             <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.1 }}
-                className="backdrop-blur-xl bg-black/40 border border-white/10 rounded-2xl p-5 shadow-2xl pointer-events-auto flex flex-col gap-3 max-h-[50vh] overflow-y-auto custom-scrollbar"
+                className="backdrop-blur-xl bg-black/40 border border-white/10 rounded-2xl p-5 shadow-2xl pointer-events-auto flex flex-col gap-3 min-h-0 overflow-hidden"
             >
-                <div className="p-4 border-b border-white/5 bg-black/40 backdrop-blur-md sticky top-0 z-10 flex justify-between items-center">
+                <div className="border-b border-white/5 pb-3 flex justify-between items-center">
                     <h2 className="text-xs font-black text-white/90 flex items-center gap-2 uppercase tracking-[0.2em]">
                         <TrendingUp className="w-3.5 h-3.5 text-purple-400" />
                         Recent Suggestions
@@ -96,7 +102,7 @@ export default function Dashboard({ onSelectPin, className }: DashboardProps) {
                     <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                 </div>
 
-                <div className="p-4 space-y-3 overflow-y-auto custom-scrollbar">
+                <div className="space-y-3 overflow-y-auto custom-scrollbar pr-1 max-h-[30vh]">
                     {recentPins.length === 0 ? (
                         <p className="text-[10px] text-gray-500 italic text-center py-6">No suggestions found. Be the first!</p>
                     ) : (
@@ -152,6 +158,68 @@ export default function Dashboard({ onSelectPin, className }: DashboardProps) {
                     )}
                 </div>
             </motion.div>
+
+            {/* Analysis Widget - Moved to 3rd position */}
+            <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+                className={`backdrop-blur-xl bg-black/40 border border-white/10 rounded-2xl p-5 shadow-2xl pointer-events-auto flex flex-col gap-3 shrink-0 ${isAnalysisMode ? 'ring-1 ring-yellow-500/30 border-yellow-500/20' : ''}`}
+            >
+                <div className="flex justify-between items-center">
+                    <h2 className="text-xs font-black text-white/90 flex items-center gap-2 uppercase tracking-[0.2em]">
+                        <Activity className={`w-3.5 h-3.5 ${isAnalysisMode ? 'text-yellow-400 animate-pulse' : 'text-purple-400'}`} />
+                        Analysis Mode
+                    </h2>
+                    <div className="flex items-center gap-2">
+                        {hasHistory && (
+                            <button onClick={onShowHistory} className="text-[10px] font-bold text-white/50 hover:text-white uppercase tracking-widest bg-white/5 hover:bg-white/10 px-2 py-1 rounded-md transition-colors">
+                                History
+                            </button>
+                        )}
+                        {isAnalysisMode && (
+                            <div className="flex items-center gap-1 bg-yellow-500/20 px-2 py-0.5 rounded-full">
+                                <div className="w-1 h-1 rounded-full bg-yellow-500 animate-ping" />
+                                <span className="text-[8px] font-bold text-yellow-500 uppercase tracking-tighter">Live Scan</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <p className="text-[11px] text-white/50 leading-relaxed">
+                    {isAnalysisMode
+                        ? "AI is currently identifying high-potential zones and analyzing community sentiment gaps."
+                        : "Enable analysis to discover optimal locations for new urban development and business ventures."}
+                </p>
+
+                <button
+                    onClick={() => {
+                        if (analysisState === 'done' && onShowDetails) {
+                            onShowDetails();
+                        } else if (analysisState === 'idle') {
+                            onStartAnalysis?.(!isAnalysisMode);
+                        }
+                    }}
+                    disabled={analysisState === 'running'}
+                    className={`w-full py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border shadow-lg ${analysisState === 'running'
+                        ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-300 animate-pulse cursor-wait'
+                        : analysisState === 'done'
+                            ? 'bg-green-500/20 border-green-500/50 text-green-400 hover:bg-green-500/30'
+                            : isAnalysisMode
+                                ? 'bg-yellow-500/10 border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/20'
+                                : 'bg-white/10 border-white/10 text-white/70 hover:bg-white/20 hover:text-white'
+                        }`}
+                >
+                    {analysisState === 'running'
+                        ? 'Running Analysis...'
+                        : analysisState === 'done'
+                            ? 'Show details'
+                            : isAnalysisMode
+                                ? 'Deactivate Analysis'
+                                : 'Start to analysis'}
+                </button>
+            </motion.div>
+
         </div>
     );
 }

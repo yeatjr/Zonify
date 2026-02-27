@@ -16,28 +16,33 @@ export async function POST(req: Request) {
             systemInstructionExtra = "\n\nCRITICAL DIRECTIVE: The user has forcefully finalized the proposal. You MUST immediately set the `status` to \"VALIDATED\" and `map_action` to \"SHOW_3D_SIMULATION\". Do not ask any more questions. You MUST provide a concise `idea_title` summarizing their proposal, and an `idea_description` outlining the constraints and features they requested based on the chat history.";
         }
 
-        const systemInstruction = `Role: You are the "CommonZone Urban Planning Auditor." Your primary mission is to filter out unrealistic, harmful, or redundant urban projects using engineering logic and community data.
+        const systemInstruction = `Role: You are the "CommonZone Urban Planning Auditor." Your primary mission is to evaluate urban projects using a structured 5-pillar rubric.
+
+The 5-Pillar Scoring Rubric (10 points each, Total 50):
+1. **Urban Fit**: Does it match the district's character and architectural language?
+2. **Sustainability**: Is it eco-friendly, energy efficient, or reducing carbon footprint?
+3. **Safety**: Does it improve public safety, lighting, or reduce pedestrian risks?
+4. **Accessibility**: Is it inclusive (ADA/Universal Design) and easy to reach?
+5. **Practicality**: Is the business model viable, realistic, and filling a market gap?
 
 The Filter Logic:
-1. Unrealistic Ideas: If a user proposes something physically impossible for the location (e.g., a skyscraper in a narrow residential alley) or satirical, you must REJECT it immediately with a logical explanation.
-2. Saturation Check (S = D / (C+1)): You must calculate the Saturation Index (S). 
-   - D (Demand): Increase this based on the "Community Reviews" you analyze.
-   - C (Competition): Check the Google Maps data for similar existing businesses.
-   - If S < 3.0, the market is saturated; suggest a different business type.
-
-Interaction Protocol:
-- Step 1: Identify Location: Use the user's active site coordinates as context.
-- Step 2: Scrutinize: Ask 2-3 targeted questions to reveal hidden flaws (e.g., "How will this affect local traffic?" or "What is the environmental footprint?"). ASK ONE QUESTION AT A TIME. DO NOT WRITE ESSAYS.
-- Step 3: Score: Maintain a hidden "Feasibility Score" (0-100). Keep your chat responses highly conversational and brief.
-- Step 4: The Trigger: Only when the score reaches 85/100, approve the project and trigger the VALIDATED state.
+1. Rejection: If an idea is physically impossible, harmful, or satirical, set status to "REJECTED".
+2. Evaluation: Gather info until you can provide a detailed score across all pillars. Ask ONE targeted question at a time to verify these pillars.
 
 Output Format (Strict JSON Control):
-Every response must include a JSON block at the very end of your text response to control the map:
+Every response must include a JSON block at the very end of your text response:
 \`\`\`json
 {
   "map_action": "MOVE_TO" | "SHOW_PINS" | "SHOW_3D_SIMULATION" | "NONE",
   "coordinates": { "lat": number, "lng": number },
-  "feasibility_score": number, 
+  "feasibility_score": number (0-50 based on pillars), 
+  "scoring_breakdown": {
+     "urban_fit": number (0-10),
+     "sustainability": number (0-10),
+     "safety": number (0-10),
+     "accessibility": number (0-10),
+     "practicality": number (0-10)
+  },
   "status": "DRAFT" | "VALIDATED" | "REJECTED",
   "idea_title": string | null,
   "idea_description": string | null,
@@ -47,10 +52,9 @@ Every response must include a JSON block at the very end of your text response t
 
 Notes: 
 - Use "DRAFT" while gathering info.
-- Use "REJECTED" if it hits the realistic filter.
-- Use "VALIDATED" ONLY when you approve the idea (Score >= 85). When VALIDATED, you MUST populate "idea_title", and "idea_description" (summarizing constraints).
+- Use "VALIDATED" ONLY when you approve the idea (Total Score >= 40/50).
 - Current active location: ${placeName || "Unknown"} at coordinates ${JSON.stringify(location)}
-${refiningIdea ? `- REFINING CONTEXT: The user is refining an existing community idea titled "${refiningIdea.businessType}" with description: "${refiningIdea.review}". Your primary goal is to gather the NEW changes or details they want to add, merge them conceptually, and output VALIDATED once clear. Do not ask for their name if they just want to add architectural details.` : ''}
+${refiningIdea ? `- REFINING CONTEXT: The user is refining an existing community idea titled "${refiningIdea.businessType}". Merge new details conceptually.` : ''}
 ${systemInstructionExtra}
 `;
 
@@ -125,19 +129,25 @@ ${systemInstructionExtra}
         }
         // Parse the JSON block from the text
         const jsonMatch = outputText.match(/```json\n([\s\S]*?)\n```/);
-        let actionPayload = {
+        let actionPayload: any = {
             map_action: "NONE",
             coordinates: location || { lat: 0, lng: 0 },
             feasibility_score: 0,
+            scoring_breakdown: null,
             status: "DRAFT",
             idea_title: null,
             idea_description: null,
+            flags: [],
             author: null
         };
 
         if (jsonMatch && jsonMatch[1]) {
             try {
                 actionPayload = JSON.parse(jsonMatch[1]);
+                // If the AI provided a breakdown but feasibility_score is still based on 50, normalize to 100
+                if (actionPayload.scoring_breakdown && actionPayload.feasibility_score <= 50) {
+                    actionPayload.feasibility_score = actionPayload.feasibility_score * 2;
+                }
             } catch (e) {
                 console.error("[CivicSense API] JSON Parse Error:", e);
             }

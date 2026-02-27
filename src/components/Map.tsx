@@ -5,12 +5,12 @@ import { APIProvider, Map as GoogleMap, AdvancedMarker, Pin, useMap, useMapsLibr
 import { collection, query, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, MessageSquare, Flag, Search } from 'lucide-react';
+import { Bot, MessageSquare, Flag, Search, Activity } from 'lucide-react';
 import SidePanel from './SidePanel';
 import IdeaGallery from './IdeaGallery';
 import Dashboard from './Dashboard';
 import { useAuth } from '@/context/AuthContext';
-import { getImageSrc } from '@/lib/utils';
+import { getImageSrc, getDistanceFromLatLonInKm } from '@/lib/utils';
 
 export type RenovationPin = {
     id: string;
@@ -143,18 +143,30 @@ function MapSearch({ onPlaceSelect }: { onPlaceSelect: (place: google.maps.place
     );
 }
 
-export default function Map() {
+interface MapProps {
+    isAnalysisMode?: boolean;
+    onStartAnalysis?: (active: boolean) => void;
+    onSelectPin?: any;
+    onRunAnalysis?: (location: { lat: number; lng: number; }, nearbyPins: any[], placeName: string) => void;
+}
+
+export default function Map({ isAnalysisMode = false, onStartAnalysis, onSelectPin, onRunAnalysis }: MapProps) {
     return (
         <APIProvider
             apiKey={(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY && !process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.includes('Dummy')) ? process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY : ''}
             libraries={['places', 'marker', 'geometry']}
         >
-            <MapInner />
+            <MapInner
+                isAnalysisMode={isAnalysisMode}
+                onStartAnalysis={onStartAnalysis}
+                onSelectPin={onSelectPin}
+                onRunAnalysis={onRunAnalysis}
+            />
         </APIProvider>
     );
 }
 
-function MapInner() {
+function MapInner({ isAnalysisMode, onStartAnalysis, onSelectPin: onSelectPinFromParent, onRunAnalysis }: MapProps) {
     const [pins, setPins] = useState<RenovationPin[]>([]);
     const [tempPin, setTempPin] = useState<{ lat: number, lng: number } | null>(null);
     const [pendingPin, setPendingPin] = useState<{ lat: number, lng: number } | null>(null);
@@ -168,9 +180,21 @@ function MapInner() {
     // Auth context
     const { user, loginWithGoogle } = useAuth();
 
-    // Map hooks must be declared before callbacks
-    const map = useMap();
+    // Map hooks
+    const map = useMap('main-map');
     const placesLib = useMapsLibrary('places');
+
+    const fetchPins = () => {
+        // Redundant as we use onSnapshot, but kept for IdeaGallery prop compatibility
+        console.log("[CivicSense] Pins refresh triggered");
+    };
+
+    // Robust check for libraries and map
+    useEffect(() => {
+        if (map && placesLib) {
+            console.log("[CivicSense] Map and Places Library are ready.");
+        }
+    }, [map, placesLib]);
 
     const handleAiResponse = (action: any) => {
         if (action.map_action === "MOVE_TO" && action.coordinates) {
@@ -192,21 +216,9 @@ function MapInner() {
         }
     }, [map]);
 
-    const fetchPins = async () => {
-        try {
-            const querySnapshot = await getDocs(collection(db, 'pins'));
-            const fetchedPins: RenovationPin[] = [];
-            querySnapshot.forEach((doc) => {
-                fetchedPins.push({ id: doc.id, ...doc.data() } as RenovationPin);
-            });
-            setPins(fetchedPins);
-        } catch (error) {
-            console.error("Error fetching pins:", error);
-        }
-    };
 
     useEffect(() => {
-        const unsubscribe = onSnapshot(collection(db, 'pins'), 
+        const unsubscribe = onSnapshot(collection(db, 'pins'),
             (snapshot) => {
                 const fetchedPins: RenovationPin[] = [];
                 snapshot.forEach((doc) => {
@@ -216,7 +228,6 @@ function MapInner() {
             },
             (error) => {
                 console.error("Firestore Error Fetching Pins:", error);
-                alert("Database Error: Could not load pins. Please check your Firebase Console Security Rules (they may be missing or expired).");
             }
         );
         return () => unsubscribe();
@@ -230,15 +241,9 @@ function MapInner() {
 
 
     const handleMapClick = useCallback((e: any) => {
-        if (!map || !placesLib) {
-            console.log("[CivicSense] Map dependencies not ready:", {
-                map: !!map,
-                places: !!placesLib
-            });
-            return;
-        }
+        if (!map || !placesLib) return;
 
-        if (tempPin) return; // Lock the map pin while chat is open, but allow moving the green confirmation pin freely
+        if (tempPin) return;
 
         const latLng = e.detail?.latLng || e.latLng;
         const placeId = e.detail?.placeId;
@@ -261,17 +266,12 @@ function MapInner() {
             return types && types.length > 0 && types.every(t => REGION_TYPES.includes(t));
         };
 
-        // Open confirmation overlay before starting the chat
         setSelectedPlaceName("Detecting location...");
         setPendingPin({ lat, lng });
 
         const findNearestBusiness = (loc: { lat: number, lng: number }, service: google.maps.places.PlacesService) => {
-            console.log("[CivicSense] Searching for context at", loc);
-
-            // Priority 1: Geocode for Area/Neighborhood Name
             const geocoder = new google.maps.Geocoder();
             geocoder.geocode({ location: loc }, (gResults: any, gStatus: any) => {
-                console.log("[CivicSense] Geocode status:", gStatus);
                 const isGeoOk = gStatus === 'OK' || gStatus === google.maps.GeocoderStatus.OK;
 
                 if (isGeoOk && gResults?.[0]) {
@@ -282,28 +282,21 @@ function MapInner() {
                         c.types.includes('locality')
                     );
 
-                    // If we found a specific area/neighborhood, use it
                     if (area && !area.types.includes('country')) {
-                        console.log("[CivicSense] Found area name:", area.long_name);
                         setSelectedPlaceName(area.long_name);
                         return;
                     }
                 }
 
-                // Priority 2: Nearby Search for Establishment
                 service.nearbySearch({
                     location: loc,
                     radius: 50,
                     type: 'establishment'
                 }, (results, status) => {
-                    console.log("[CivicSense] nearbySearch status:", status);
                     const isOk = (status as any) === 'OK' || (status as any) === (placesLib as any).PlacesServiceStatus.OK;
                     if (isOk && results && results.length > 0) {
-                        const foundName = results[0].name || "New Development";
-                        console.log("[CivicSense] nearbySearch found business:", foundName);
-                        setSelectedPlaceName(foundName);
+                        setSelectedPlaceName(results[0].name || "New Development");
                     } else if (gResults?.[0]) {
-                        // Fallback to formatted address
                         setSelectedPlaceName(gResults[0].formatted_address.split(',')[0]);
                     } else {
                         setSelectedPlaceName(`Location: ${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`);
@@ -312,44 +305,36 @@ function MapInner() {
             });
         };
 
-        const service = new placesLib.PlacesService(map);
+        const service = new (placesLib as any).PlacesService(map);
         const latLngObj = { lat, lng };
 
-        // Smart Detection: Check if there's already a pin here (within ~11 meters)
         const existingPin = pins.find(p => (
             Math.abs(p.lat - lat) < 0.0001 && Math.abs(p.lng - lng) < 0.0001
         ));
 
         if (existingPin) {
-            console.log("[CivicSense] Existing pin detected. Opening gallery.");
             setSelectedLocation({ lat: existingPin.lat, lng: existingPin.lng });
             return;
         }
 
         if (placeId) {
-            console.log("[CivicSense] POI clicked. ID:", placeId);
             if (e.stop) e.stop();
-            service.getDetails({ placeId, fields: ['name', 'types', 'formatted_address'] }, (place, status) => {
-                console.log("[CivicSense] getDetails status:", status);
-                const isDetOk = (status as any) === 'OK' || (status as any) === (placesLib as any).PlacesServiceStatus.OK;
+            service.getDetails({ placeId, fields: ['name', 'types', 'formatted_address'] }, (place: google.maps.places.PlaceResult | null, status: google.maps.places.PlacesServiceStatus) => {
+                const isDetOk = status === google.maps.places.PlacesServiceStatus.OK;
                 if (isDetOk) {
                     if (place && isRegionType(place.types || [])) {
-                        console.log("[CivicSense] Region detected (" + place.name + "), checking for businesses...");
                         findNearestBusiness(latLngObj, service);
                     } else if (place) {
-                        console.log("[CivicSense] Specific place detected:", place.name);
                         setSelectedPlaceName(place.name || "Unknown Place");
                     }
                 } else {
-                    console.warn("[CivicSense] getDetails failed. Falling back to nearby search.");
                     findNearestBusiness(latLngObj, service);
                 }
             });
         } else {
-            console.log("[CivicSense] Background click at:", latLngObj);
             findNearestBusiness(latLngObj, service);
         }
-    }, [user, map, placesLib, tempPin, pendingPin]);
+    }, [user, map, placesLib, tempPin, pins]);
 
     const handleCancel = () => {
         setTempPin(null);
@@ -362,9 +347,6 @@ function MapInner() {
         const savedLocation = tempPin;
         setTempPin(null);
         setRefiningIdea(null);
-        // fetchPins(); // No longer needed as onSnapshot handles it
-
-        // If we were refining, or even if it's a new pin, show the updated gallery for that spot
         if (savedLocation) {
             setSelectedLocation({ lat: savedLocation.lat, lng: savedLocation.lng });
         }
@@ -372,14 +354,12 @@ function MapInner() {
 
     const handleFabClick = () => {
         if (user) {
-            // Default center if no right click occurred
             setTempPin({ lat: mapData.lat, lng: mapData.lng });
         } else {
             loginWithGoogle();
         }
     };
 
-    // Group pins by location
     const groupedPins = pins.reduce((acc, pin) => {
         const key = `${pin.lat.toFixed(6)},${pin.lng.toFixed(6)}`;
         if (!acc[key]) {
@@ -394,7 +374,6 @@ function MapInner() {
         return acc;
     }, {} as Record<string, { lat: number, lng: number, mainPinId: string, ideas: RenovationPin[] }>);
 
-    // Sort ideas inside groups by agreementCount to showcase best iterations on Map Tooltips
     Object.values(groupedPins).forEach(group => {
         group.ideas.sort((a, b) => (b.agreementCount || 0) - (a.agreementCount || 0));
     });
@@ -403,8 +382,52 @@ function MapInner() {
         ? groupedPins[`${selectedLocation.lat.toFixed(6)},${selectedLocation.lng.toFixed(6)}`]?.ideas || []
         : [];
 
+    // Navigation from parent
+    useEffect(() => {
+        if (onSelectPinFromParent && map) {
+            const pin = onSelectPinFromParent;
+            const match = Object.values(groupedPins).find(g =>
+                g.ideas.some(i => i.id === pin.id)
+            );
+            const targetLat = match ? match.lat : Number(pin.lat);
+            const targetLng = match ? match.lng : Number(pin.lng);
+
+            setMapData({ lat: targetLat, lng: targetLng, zoom: 18 });
+            map.panTo({ lat: targetLat, lng: targetLng });
+            map.setZoom(18);
+
+            setSelectedIdeaId(pin.id);
+            setSelectedLocation({ lat: targetLat, lng: targetLng });
+        }
+    }, [onSelectPinFromParent, map, groupedPins]);
+
     return (
         <div className="w-full h-full relative" id="civic-map-container">
+            {/* Analysis Pulse Overlay */}
+            <AnimatePresence>
+                {isAnalysisMode && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 z-10 pointer-events-none overflow-hidden"
+                    >
+                        <motion.div
+                            animate={{
+                                boxShadow: [
+                                    "inset 0 0 100px rgba(234, 179, 8, 0)",
+                                    "inset 0 0 150px rgba(234, 179, 8, 0.15)",
+                                    "inset 0 0 100px rgba(234, 179, 8, 0)"
+                                ]
+                            }}
+                            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                            className="absolute inset-0"
+                        />
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-yellow-500/50 to-transparent animate-pulse" />
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <GoogleMap
                 id="main-map"
                 defaultCenter={{ lat: mapData.lat, lng: mapData.lng }}
@@ -438,22 +461,21 @@ function MapInner() {
                                 whileHover={{ scale: 1.2, rotate: [0, -10, 10, 0] }}
                                 className="relative flex flex-col items-center"
                             >
-                                <div className="bg-white/10 backdrop-blur-md rounded-full w-10 h-10 flex items-center justify-center border border-white/20 shadow-xl group-hover:bg-purple-600/20 transition-colors">
-                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center shadow-lg">
+                                <div className="bg-white/10 backdrop-blur-md rounded-full w-10 h-10 flex items-center justify-center border border-white/20 shadow-xl transition-colors group-hover:bg-purple-600/20">
+                                    <div className="w-8 h-8 rounded-full flex items-center justify-center shadow-lg bg-gradient-to-br from-purple-500 to-blue-500">
                                         <Flag className="w-4 h-4 text-white" />
                                     </div>
                                 </div>
-                                <div className="w-0.5 h-3 bg-gradient-to-b from-purple-500 to-transparent shadow-sm" />
+                                <div className="w-0.5 h-3 bg-gradient-to-b shadow-sm from-purple-500 to-transparent" />
                                 <div className="w-3 h-1 bg-black/40 rounded-full blur-[1px] -mt-0.5" />
                             </motion.div>
 
-                            {/* Tooltip for Saturation Index on hover */}
                             {hoveredPinId === group.mainPinId && group.ideas[0].saturationIndex !== null && (
                                 <motion.div
                                     key={`tooltip-${group.mainPinId}`}
                                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                                     animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    className="absolute bottom-14 bg-black/60 backdrop-blur-xl rounded-[28px] p-2.5 text-xs font-semibold text-white border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50 pointer-events-none min-w-[200px]"
+                                    className={`absolute bottom-14 bg-black/60 backdrop-blur-xl rounded-[28px] p-2.5 text-xs font-semibold text-white border shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50 pointer-events-none min-w-[200px] ${isAnalysisMode ? 'border-yellow-500/30' : 'border-white/20'}`}
                                 >
                                     {group.ideas[0].visionImage && (
                                         <div className="w-full aspect-video rounded-[20px] overflow-hidden mb-3 border border-white/10 relative group">
@@ -477,18 +499,6 @@ function MapInner() {
                                         </div>
                                         <div className="text-sm font-bold text-white tracking-tight truncate">{group.ideas[0].businessType}</div>
                                         <div className="text-gray-300 text-[10px] mt-1 line-clamp-2 leading-tight">{group.ideas[0].review}</div>
-                                        {group.ideas.length > 1 && (
-                                            <div className="flex items-center gap-1.5 mt-2 text-purple-400">
-                                                <div className="flex -space-x-2">
-                                                    {[...Array(Math.min(3, group.ideas.length - 1))].map((_, i) => (
-                                                        <div key={i} className="w-4 h-4 rounded-full bg-purple-500 border border-black flex items-center justify-center text-[6px]">
-                                                            {group.ideas[i + 1].author?.charAt(0) || 'U'}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                <span className="text-[9px] font-bold">+{group.ideas.length - 1} community ideas</span>
-                                            </div>
-                                        )}
                                     </div>
                                 </motion.div>
                             )}
@@ -501,21 +511,41 @@ function MapInner() {
                         <motion.div
                             initial={{ scale: 0, opacity: 0, y: 10 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
-                            className="bg-gray-900 border border-purple-500 rounded-lg p-3 shadow-2xl flex flex-col gap-2 items-center min-w-[160px] pointer-events-auto"
+                            className={`bg-black/80 backdrop-blur-xl border rounded-2xl p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col gap-3 min-w-[200px] pointer-events-auto transition-all ${isAnalysisMode ? 'border-yellow-500/50 shadow-yellow-500/10' : 'border-purple-500/50'}`}
                         >
-                            <span className="text-white text-[11px] font-bold text-center leading-tight">
-                                <span className="text-purple-300">{selectedPlaceName || "this area"}</span>
-                            </span>
+                            <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full animate-pulse ${isAnalysisMode ? 'bg-yellow-400' : 'bg-purple-400'}`} />
+                                <span className={`text-[10px] font-black uppercase tracking-widest ${isAnalysisMode ? 'text-yellow-300' : 'text-purple-300'}`}>
+                                    {isAnalysisMode ? 'Analysis Pulse' : 'Agent Detected'}
+                                </span>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-white text-sm font-bold leading-tight">
+                                    {selectedPlaceName || "New Opportunity"}
+                                </span>
+                                <span className="text-white/40 text-[9px] mt-0.5">
+                                    {isAnalysisMode ? 'Deep site evaluation ready' : 'Ready for urban simulation?'}
+                                </span>
+                            </div>
                             <div className="flex w-full mt-1">
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        setTempPin(pendingPin);
+                                        if (isAnalysisMode && onRunAnalysis) {
+                                            const nearbyPins = pins.filter(p => {
+                                                const dist = getDistanceFromLatLonInKm(pendingPin.lat, pendingPin.lng, p.lat, p.lng);
+                                                return dist <= 10;
+                                            });
+                                            const placeToPass = selectedPlaceName || "New Opportunity";
+                                            onRunAnalysis(pendingPin, nearbyPins, placeToPass);
+                                        } else {
+                                            setTempPin(pendingPin);
+                                        }
                                         setPendingPin(null);
                                     }}
-                                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white text-[10px] font-bold py-1.5 rounded transition-colors shadow-lg uppercase tracking-wider"
+                                    className={`w-full text-white text-[10px] font-black py-2.5 rounded-xl transition-all shadow-lg uppercase tracking-widest border border-white/10 ${isAnalysisMode ? 'bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500' : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500'}`}
                                 >
-                                    Confirm
+                                    {isAnalysisMode ? 'Run Deep Scan' : 'Confirm Spot'}
                                 </button>
                             </div>
                         </motion.div>
@@ -527,9 +557,9 @@ function MapInner() {
                         <motion.div
                             initial={{ scale: 0 }}
                             animate={{ scale: 1 }}
-                            className="bg-blue-500 rounded-full w-8 h-8 flex items-center justify-center border-2 border-white/50 animate-pulse"
+                            className={`${isAnalysisMode ? 'bg-yellow-500' : 'bg-blue-500'} rounded-full w-8 h-8 flex items-center justify-center border-2 border-white/50 animate-pulse`}
                         >
-                            <Pin background={'#3b82f6'} glyphColor={'#ffffff'} borderColor={'transparent'} />
+                            <Pin background={isAnalysisMode ? '#eab308' : '#3b82f6'} glyphColor={'#ffffff'} borderColor={'transparent'} />
                         </motion.div>
                     </AdvancedMarker>
                 )}
@@ -545,7 +575,6 @@ function MapInner() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 20, scale: 0.8 }}
                     >
-                        {/* Optional Tooltip Bubble */}
                         <motion.div
                             initial={{ opacity: 0, scale: 0.8 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -557,7 +586,7 @@ function MapInner() {
 
                         <button
                             onClick={handleFabClick}
-                            className="group relative flex items-center justify-center w-14 h-14 bg-gradient-to-br from-purple-600 to-blue-600 rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all duration-300 ring-4 ring-black/20"
+                            className="group relative flex items-center justify-center w-14 h-14 rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all duration-300 ring-4 ring-black/20 bg-gradient-to-br from-purple-600 to-blue-600"
                         >
                             <div className="absolute inset-0 rounded-full bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
                             <Bot className="w-6 h-6 text-white" />
@@ -566,34 +595,6 @@ function MapInner() {
                 )}
             </AnimatePresence>
 
-            <Dashboard
-                onSelectPin={(pin: RenovationPin) => {
-                    console.log("[CivicSense] Dashboard navigating to ID:", pin.id, "Name:", pin.businessType);
-
-                    // Prioritize exact group match by ID to avoid snapping to wrong ideas
-                    const match = Object.values(groupedPins).find(g =>
-                        g.ideas.some(i => i.id === pin.id)
-                    );
-
-                    const targetLat = match ? match.lat : Number(pin.lat);
-                    const targetLng = match ? match.lng : Number(pin.lng);
-
-                    console.log("[CivicSense] Navigating to target:", { targetLat, targetLng }, "Match Found:", !!match);
-
-                    // 1. Reactive state update (Fallback/Visual Sync)
-                    setMapData({ lat: targetLat, lng: targetLng, zoom: 18 });
-
-                    // 2. Imperative movement
-                    if (map) {
-                        map.panTo({ lat: targetLat, lng: targetLng });
-                        map.setZoom(18);
-                    }
-
-                    // 3. Focus Gallery
-                    setSelectedIdeaId(pin.id);
-                    setSelectedLocation({ lat: targetLat, lng: targetLng });
-                }}
-            />
 
             <SidePanel
                 isOpen={!!tempPin}

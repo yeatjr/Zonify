@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { X, Loader2, Send, Bot, User, CheckCircle, XCircle, Image as ImageIcon, MapPin, LogIn } from 'lucide-react';
+import { X, Loader2, Send, Bot, User, CheckCircle, XCircle, Image as ImageIcon, MapPin, LogIn, Activity } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getImageSrc } from '@/lib/utils';
 
@@ -35,6 +35,9 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
     const [visionLoading, setVisionLoading] = useState(false);
     const [generatedVision, setGeneratedVision] = useState<string | null>(null);
     const [statusText, setStatusText] = useState('');
+    const [breakdown, setBreakdown] = useState<any>(null);
+    const [showBreakdown, setShowBreakdown] = useState(false);
+    const [siteAnalysis, setSiteAnalysis] = useState<any>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const { user, loginWithGoogle } = useAuth();
 
@@ -54,28 +57,32 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                 const isRealName = placeName && placeName !== "Detecting location...";
                 let greeting = isRealName
                     ? `Hi! I see you're interested in **${placeName}**. What's your vision for this location?`
-                    : "Hi! I'm scanning this location for you... What kind of renovation or new business would you like to propose here?";
+                    : "Hi! I'm scanning this location for you... What kind of renovation or new business would you like any to propose here?";
 
                 if (refiningIdea) {
                     greeting = `Hi! You are adding details to the existing proposal **${refiningIdea.businessType}**. What new changes or details would you like to add?`;
                 }
 
-                // Only update if the greeting actually changes
-                if (isInitial || (isRealName && isScanning)) {
-                    setMessages([{ role: 'model', text: greeting }]);
+                // Only update if the greeting actually changes or location changed
+                if (isInitial || (isRealName && isScanning) || isDifferentLocation) {
+                    if (isDifferentLocation) {
+                        setMessages([]);
+                        setStatus('DRAFT');
+                        setFeasibility(null);
+                        setGeneratedVision(null);
+                        setBreakdown(null);
+                        setShowBreakdown(false);
+                        setSiteAnalysis(null);
+                        setInput('');
+                    }
+                    setMessages(prev => [...(isDifferentLocation ? [] : prev), { role: 'model', text: greeting }]);
                 }
-                
-                setStatus('DRAFT');
-                setFeasibility(null);
-                setSimulation(false);
-                setGeneratedVision(null);
-                setInput('');
             }
         }
 
         if (!isOpen) {
-            // Keep the chat history intact if closed, but hide any active loading state
             setLoading(false);
+            setShowBreakdown(false);
         }
     }, [isOpen, placeName]);
 
@@ -113,6 +120,7 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
 
                 setStatus(action.status);
                 if (action.feasibility_score > 0) setFeasibility(action.feasibility_score);
+                if (action.scoring_breakdown) setBreakdown(action.scoring_breakdown);
 
                 if (action.status === 'VALIDATED') {
                     console.log("[SidePanel] Entered VALIDATED block");
@@ -145,34 +153,11 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                     // Trigger Backend Vision Generation
                     let finalVisionImage = null;
                     let analysisData = null;
+                    let tempBase64 = null;
                     try {
                         setStatusText('AI: Analyzing urban environment...');
                         const controller = new AbortController();
                         const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-                        const compressImage = (base64Str: string, maxWidth = 800, quality = 0.6): Promise<string> => {
-                            return new Promise((resolve) => {
-                                const img = new Image();
-                                img.onload = () => {
-                                    const canvas = document.createElement('canvas');
-                                    const scale = Math.min(1, maxWidth / img.width);
-                                    canvas.width = img.width * scale;
-                                    canvas.height = img.height * scale;
-                                    const ctx = canvas.getContext('2d');
-                                    ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-                                    const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
-                                    const resultBase64 = compressedDataUrl.split(',')[1];
-                                    console.log(`[CivicSense] Image compressed from ~${Math.round(base64Str.length / 1024)}KB to ~${Math.round(resultBase64.length / 1024)}KB`);
-                                    resolve(resultBase64);
-                                };
-                                img.onerror = () => {
-                                    console.error("[CivicSense] Canvas compression failed, returning original image");
-                                    resolve(base64Str); // Fallback to original if failure
-                                };
-                                const mimeType = base64Str.startsWith('iVBORw0KGgo') ? 'image/png' : 'image/jpeg';
-                                img.src = `data:${mimeType};base64,${base64Str}`;
-                            });
-                        };
 
                         const visionRes = await fetch('/api/vision/generate', {
                             method: 'POST',
@@ -191,10 +176,12 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
 
                         const visionData = await visionRes.json();
                         console.log("[SidePanel] Vision API returned data:", !!visionData);
-                        if (visionData.success && visionData.visionUrl) {
+                        if (visionData.success) {
                             finalVisionImage = visionData.visionUrl;
+                            tempBase64 = visionData.base64;
                             analysisData = visionData.analysis;
-                            setGeneratedVision(visionData.visionUrl);
+                            setSiteAnalysis(visionData.analysis);
+                            if (visionData.visionUrl) setGeneratedVision(visionData.visionUrl);
                         }
                     } catch (vErr) {
                         console.error("[SidePanel] Vision Generation failed:", vErr);
@@ -234,8 +221,6 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                         likes: 0,
                         imageStatus: finalVisionImage ? 'done' : 'failed',
                         imageBase64: finalVisionImage || null,
-                        environmentAnalysis: analysisData?.envAnalysis || null,
-                        satelliteAnalysis: analysisData?.satelliteAnalysis || null,
                         timestamp: new Date(),
                         source: 'CivicSense'
                     };
@@ -275,13 +260,14 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
 
 
                     // Add vision to chat history before closing or staying
-                    if (finalVisionImage) {
+                    if (tempBase64 || finalVisionImage) {
                         setMessages(prev => [...prev, {
                             role: 'model',
                             text: 'I have generated a 3D architecture vision for your proposal:',
-                            imageBase64: finalVisionImage
+                            imageBase64: tempBase64 || finalVisionImage
                         }]);
-                    } else {
+                    }
+                    else {
                         setMessages(prev => [...prev, {
                             role: 'model',
                             text: 'Your proposal has been successfully saved to the map! (Note: 3D Vision generation is currently offline due to free-tier quotas).'
@@ -326,16 +312,19 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                     <div className="p-5 border-b border-white/10 flex justify-between items-center bg-black/20">
                         <div className="flex-1 min-w-0 mr-4">
                             <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-blue-500 font-outfit truncate">
-                                {placeName || "AI Planning Agent"}
+                                {placeName || "Civic Auditor"}
                             </h2>
                             <div className="flex items-center gap-2 mt-1">
                                 <div className="text-[10px] text-gray-400 font-medium tracking-wider uppercase">
                                     {placeName === "Detecting location..." ? "Searching..." : (placeName ? "Contextual Planning" : `Status: ${status}`)}
                                 </div>
                                 {feasibility !== null && (
-                                    <div className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded flex items-center gap-1">
-                                        Score: {feasibility}/10
-                                    </div>
+                                    <button
+                                        onClick={() => setShowBreakdown(!showBreakdown)}
+                                        className={`text-[10px] px-2 py-0.5 rounded flex items-center gap-1 transition-all ${showBreakdown ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/30' : 'bg-purple-500/20 text-purple-300 hover:bg-purple-500/40'}`}
+                                    >
+                                        Score: {feasibility}/100
+                                    </button>
                                 )}
                             </div>
                         </div>
@@ -346,6 +335,47 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                             <X className="w-5 h-5 text-gray-200" />
                         </button>
                     </div>
+
+                    {/* Scoring Breakdown Overlay */}
+                    <AnimatePresence>
+                        {showBreakdown && breakdown && (
+                            <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="bg-purple-900/40 border-b border-purple-500/30 overflow-hidden"
+                            >
+                                <div className="p-4 space-y-3">
+                                    <div className="flex justify-between items-center text-[10px] font-bold text-purple-200 uppercase tracking-widest mb-1">
+                                        <span>Planning Analysis</span>
+                                        <span>{feasibility}/100</span>
+                                    </div>
+                                    {[
+                                        { label: 'Urban Fit', val: breakdown.urban_fit },
+                                        { label: 'Sustainability', val: breakdown.sustainability },
+                                        { label: 'Safety', val: breakdown.safety },
+                                        { label: 'Accessibility', val: breakdown.accessibility },
+                                        { label: 'Practicality', val: breakdown.practicality },
+                                    ].map((item, i) => (
+                                        <div key={i} className="space-y-1">
+                                            <div className="flex justify-between text-[10px] text-gray-300">
+                                                <span>{item.label}</span>
+                                                <span className="font-mono">{item.val}/10</span>
+                                            </div>
+                                            <div className="h-1 bg-black/40 rounded-full overflow-hidden">
+                                                <motion.div
+                                                    initial={{ width: 0 }}
+                                                    animate={{ width: `${(item.val / 10) * 100}%` }}
+                                                    transition={{ delay: i * 0.1, duration: 1, ease: "easeOut" }}
+                                                    className="h-full bg-gradient-to-r from-purple-500 to-blue-500"
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
 
                     {/* Chat Area */}
                     <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar">
@@ -375,6 +405,38 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                                 </div>
                             </motion.div>
                         )}
+
+                        {/* AI Environment Audit - Added back */}
+                        {siteAnalysis && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="mb-6"
+                            >
+                                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-4 shadow-xl backdrop-blur-md relative overflow-hidden group">
+                                    <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+                                        <Activity className="w-12 h-12 text-yellow-500" />
+                                    </div>
+                                    <div className="relative z-10">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
+                                            <span className="text-[10px] font-black text-yellow-500 uppercase tracking-widest">AI Site Audit</span>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="text-[11px] text-gray-300 leading-relaxed font-medium">
+                                                <span className="text-yellow-500/60 font-black uppercase text-[9px] block mb-0.5">Street Vision:</span>
+                                                {siteAnalysis.envAnalysis}
+                                            </div>
+                                            <div className="text-[11px] text-gray-300 leading-relaxed font-medium border-t border-yellow-500/10 pt-2">
+                                                <span className="text-orange-400/60 font-black uppercase text-[9px] block mb-0.5">Satellite Context:</span>
+                                                {siteAnalysis.satelliteAnalysis}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+
 
                         {messages.map((msg, idx) => (
                             <motion.div
@@ -418,6 +480,7 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                             </div>
                         )}
                         <div ref={messagesEndRef} />
+
                     </div>
 
                     {/* Status Banners */}
