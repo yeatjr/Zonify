@@ -6,6 +6,7 @@ import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { X, Loader2, Send, Bot, User, CheckCircle, XCircle, Image as ImageIcon, MapPin, LogIn } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { getImageSrc } from '@/lib/utils';
 
 interface SidePanelProps {
     isOpen: boolean;
@@ -14,6 +15,7 @@ interface SidePanelProps {
     onSuccess: () => void;
     onAiAction?: (action: any) => void;
     placeName?: string | null;
+    refiningIdea?: any;
 }
 
 type Message = {
@@ -22,7 +24,7 @@ type Message = {
     imageBase64?: string | null;
 };
 
-export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiAction, placeName }: SidePanelProps) {
+export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiAction, placeName, refiningIdea }: SidePanelProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -44,9 +46,13 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
 
             if (isInitial || isScanning) {
                 const isRealName = placeName && placeName !== "Detecting location...";
-                const greeting = isRealName
+                let greeting = isRealName
                     ? `Hi! I see you're interested in **${placeName}**. What's your vision for this location?`
                     : "Hi! I'm scanning this location for you... What kind of renovation or new business would you like to propose here?";
+
+                if (refiningIdea) {
+                    greeting = `Hi! You are adding details to the existing proposal **${refiningIdea.businessType}**. What new changes or details would you like to add?`;
+                }
 
                 // Only update if the greeting actually changes
                 if (isInitial || (isRealName && isScanning)) {
@@ -84,7 +90,7 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
             const res = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ messages: newMessages, location, placeName })
+                body: JSON.stringify({ messages: newMessages, location, placeName, refiningIdea })
             });
 
             if (!res.ok) throw new Error('Failed to get response');
@@ -142,10 +148,10 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                             })
                         });
                         const visionData = await visionRes.json();
-                        if (visionData.success && visionData.imageBase64) {
-                            finalVisionImage = visionData.imageBase64;
+                        if (visionData.success && visionData.visionUrl) {
+                            finalVisionImage = visionData.visionUrl;
                             analysisData = visionData.analysis;
-                            setGeneratedVision(visionData.imageBase64);
+                            setGeneratedVision(visionData.visionUrl);
                         }
                     } catch (vErr) {
                         console.error("Vision Generation failed:", vErr);
@@ -153,6 +159,8 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                         setVisionLoading(false);
                         setStatusText('');
                     }
+
+                    const visionUrl = finalVisionImage;
 
                     const linkedPlaceId = `civic_${location.lat.toFixed(5)}_${location.lng.toFixed(5)}`;
 
@@ -164,10 +172,13 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                         author: user?.displayName || user?.email || "Anonymous",
                         agreementCount: 0,
                         saturationIndex: action.feasibility_score || 5, // Feasibility replaces Saturation temporarily for demo
-                        visionImage: finalVisionImage,
+                        visionImage: visionUrl,
+                        streetViewUrl: svUrl,
+                        satelliteUrl: satUrl,
                         analysis: analysisData,
                         createdAt: new Date(),
-                        userId: user?.uid || null
+                        userId: user?.uid || null,
+                        parentIdeaId: refiningIdea ? refiningIdea.id : null
                     };
 
                     const commentPayload = {
@@ -176,8 +187,8 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                         text: action.idea_description || userText,
                         author: user?.displayName || "Civic User",
                         likes: 0,
-                        imageStatus: finalVisionImage ? 'done' : 'failed',
-                        imageBase64: finalVisionImage,
+                        imageStatus: visionUrl ? 'done' : 'failed',
+                        imageBase64: visionUrl,
                         environmentAnalysis: analysisData?.envAnalysis || null,
                         satelliteAnalysis: analysisData?.satelliteAnalysis || null,
                         timestamp: new Date(),
@@ -204,16 +215,16 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
 
 
                     // Add vision to chat history before closing or staying
-                    if (finalVisionImage) {
-                        setMessages(prev => [...prev, { 
-                            role: 'model', 
+                    if (visionUrl) {
+                        setMessages(prev => [...prev, {
+                            role: 'model',
                             text: 'I have generated a 3D architecture vision for your proposal:',
-                            imageBase64: finalVisionImage 
+                            imageBase64: visionUrl
                         }]);
                     }
 
                     // Delay closing or let user see it
-                    // onSuccess(); 
+                    // onSuccess();
                 }
 
                 if (action.map_action === 'SHOW_3D_SIMULATION') {
@@ -313,8 +324,8 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                                     {msg.text}
                                     {msg.imageBase64 && (
                                         <div className="mt-3 rounded-lg overflow-hidden border border-white/20 shadow-lg">
-                                            <img 
-                                                src={`data:image/jpeg;base64,${msg.imageBase64}`} 
+                                            <img
+                                                src={getImageSrc(msg.imageBase64)}
                                                 alt="AI Vision"
                                                 className="w-full h-auto object-cover"
                                             />

@@ -2,14 +2,15 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { APIProvider, Map as GoogleMap, AdvancedMarker, Pin, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, query, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, MessageSquare } from 'lucide-react';
+import { Bot, MessageSquare, Flag } from 'lucide-react';
 import SidePanel from './SidePanel';
 import IdeaGallery from './IdeaGallery';
-import VisionGallery from './VisionGallery';
+import Dashboard from './Dashboard';
 import { useAuth } from '@/context/AuthContext';
+import { getImageSrc } from '@/lib/utils';
 
 export type RenovationPin = {
     id: string;
@@ -19,6 +20,7 @@ export type RenovationPin = {
     businessType: string;
     saturationIndex: number | null;
     visionImage?: string;
+    author?: string;
 };
 
 // A dark mode theme for Google Maps
@@ -120,7 +122,9 @@ function MapInner() {
     const [hoveredPinId, setHoveredPinId] = useState<string | null>(null);
     const [mapData, setMapData] = useState({ lat: 40.7128, lng: -74.0060, zoom: 13 });
     const [selectedLocation, setSelectedLocation] = useState<{ lat: number, lng: number } | null>(null);
+    const [selectedIdeaId, setSelectedIdeaId] = useState<string | null>(null);
     const [selectedPlaceName, setSelectedPlaceName] = useState<string | null>(null);
+    const [refiningIdea, setRefiningIdea] = useState<RenovationPin | null>(null);
 
     // Auth context
     const { user, loginWithGoogle } = useAuth();
@@ -135,21 +139,16 @@ function MapInner() {
         }
     };
 
-    const fetchPins = async () => {
-        try {
-            const querySnapshot = await getDocs(collection(db, 'pins'));
-            const fetchedPins: RenovationPin[] = [];
-            querySnapshot.forEach((doc) => {
-                fetchedPins.push({ id: doc.id, ...doc.data() } as RenovationPin);
-            });
-            setPins(fetchedPins);
-        } catch (error) {
-            console.error("Error fetching pins:", error);
-        }
-    };
-
     useEffect(() => {
-        fetchPins();
+        // Real-time pins synchronization
+        const q = query(collection(db, 'pins'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const fetchedPins = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RenovationPin));
+            console.log("[CivicSense] Real-time pins updated:", fetchedPins.length);
+            setPins(fetchedPins);
+        });
+
+        return () => unsubscribe();
     }, []);
 
     const handleRightClick = (e: any) => {
@@ -163,7 +162,7 @@ function MapInner() {
         }
     };
 
-    const map = useMap();
+    const map = useMap('main-map');
     const placesLib = useMapsLibrary('places');
     const geocodingLib = useMapsLibrary('geocoding');
 
@@ -252,6 +251,17 @@ function MapInner() {
         const service = new placesLib.PlacesService(map);
         const latLngObj = { lat, lng };
 
+        // Smart Detection: Check if there's already a pin here (within ~11 meters)
+        const existingPin = pins.find(p => (
+            Math.abs(p.lat - lat) < 0.0001 && Math.abs(p.lng - lng) < 0.0001
+        ));
+
+        if (existingPin) {
+            console.log("[CivicSense] Existing pin detected. Opening gallery.");
+            setSelectedLocation({ lat: existingPin.lat, lng: existingPin.lng });
+            return;
+        }
+
         if (placeId) {
             console.log("[CivicSense] POI clicked. ID:", placeId);
             if (e.stop) e.stop();
@@ -280,11 +290,19 @@ function MapInner() {
     const handleCancel = () => {
         setTempPin(null);
         setSelectedPlaceName(null);
+        setRefiningIdea(null);
     };
 
     const handlePinCreated = () => {
+        const savedLocation = tempPin;
         setTempPin(null);
-        fetchPins();
+        setRefiningIdea(null);
+        // fetchPins(); // No longer needed as onSnapshot handles it
+
+        // If we were refining, or even if it's a new pin, show the updated gallery for that spot
+        if (savedLocation) {
+            setSelectedLocation({ lat: savedLocation.lat, lng: savedLocation.lng });
+        }
     };
 
     const handleFabClick = () => {
@@ -316,12 +334,14 @@ function MapInner() {
         : [];
 
     return (
-        <div className="w-full h-full relative">
+        <div className="w-full h-full relative" id="civic-map-container">
             <GoogleMap
+                id="main-map"
                 defaultCenter={{ lat: mapData.lat, lng: mapData.lng }}
                 defaultZoom={mapData.zoom}
+                center={{ lat: mapData.lat, lng: mapData.lng }}
+                zoom={mapData.zoom}
                 onCameraChanged={(ev: any) => {
-                    // Update state to track position, but don't pass it back as a prop to avoid jitter
                     setMapData({
                         lat: ev.detail.center.lat,
                         lng: ev.detail.center.lng,
@@ -345,39 +365,58 @@ function MapInner() {
                     >
                         <div className="relative flex items-center justify-center">
                             <motion.div
-                                whileHover={{ scale: 1.2 }}
-                                className="bg-purple-600 rounded-full w-8 h-8 flex items-center justify-center border-2 border-white/20 shadow-lg shadow-purple-500/50"
+                                whileHover={{ scale: 1.2, rotate: [0, -10, 10, 0] }}
+                                className="relative flex flex-col items-center"
                             >
-                                <Pin background={'#9333ea'} glyphColor={'#ffffff'} borderColor={'transparent'} />
+                                <div className="bg-white/10 backdrop-blur-md rounded-full w-10 h-10 flex items-center justify-center border border-white/20 shadow-xl group-hover:bg-purple-600/20 transition-colors">
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center shadow-lg">
+                                        <Flag className="w-4 h-4 text-white" />
+                                    </div>
+                                </div>
+                                <div className="w-0.5 h-3 bg-gradient-to-b from-purple-500 to-transparent shadow-sm" />
+                                <div className="w-3 h-1 bg-black/40 rounded-full blur-[1px] -mt-0.5" />
                             </motion.div>
 
                             {/* Tooltip for Saturation Index on hover */}
                             {hoveredPinId === group.mainPinId && group.ideas[0].saturationIndex !== null && (
                                 <motion.div
                                     key={`tooltip-${group.mainPinId}`}
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="absolute bottom-10 bg-black/80 backdrop-blur-md rounded-2xl p-2 text-xs font-semibold text-white border border-white/20 shadow-2xl z-50 pointer-events-none min-w-[160px]"
+                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    className="absolute bottom-14 bg-black/60 backdrop-blur-xl rounded-[28px] p-2.5 text-xs font-semibold text-white border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50 pointer-events-none min-w-[200px]"
                                 >
                                     {group.ideas[0].visionImage && (
-                                        <div className="w-full aspect-video rounded-xl overflow-hidden mb-2 border border-white/10">
+                                        <div className="w-full aspect-video rounded-[20px] overflow-hidden mb-3 border border-white/10 relative group">
                                             <img
-                                                src={`data:image/jpeg;base64,${group.ideas[0].visionImage}`}
+                                                src={getImageSrc(group.ideas[0].visionImage)}
                                                 alt="AI Vision"
                                                 className="w-full h-full object-cover"
                                             />
+                                            <div className="absolute top-2 right-2 bg-purple-600/80 backdrop-blur-md px-2 py-1 rounded-full text-[8px] font-bold border border-white/20 flex items-center gap-1">
+                                                <Bot className="w-2.5 h-2.5" />
+                                                AI VISION
+                                            </div>
                                         </div>
                                     )}
-                                    <div className="px-1">
-                                        <div className="flex justify-between items-center mb-1">
-                                            <span className="text-gray-400 text-[10px] uppercase tracking-wider font-bold">Saturation Index</span>
-                                            <span className={group.ideas[0].saturationIndex! > 5 ? "text-red-400" : "text-green-400"}>
-                                                {group.ideas[0].saturationIndex?.toFixed(2)}
-                                            </span>
+                                    <div className="px-2 pb-1">
+                                        <div className="flex justify-between items-center mb-1.5">
+                                            <span className="text-[10px] text-white/50 uppercase tracking-[0.1em] font-black">Saturation</span>
+                                            <div className={`text-[10px] font-black px-2 py-0.5 rounded-full ${group.ideas[0].saturationIndex! > 5 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/10 text-green-400'}`}>
+                                                {group.ideas[0].saturationIndex?.toFixed(1)}
+                                            </div>
                                         </div>
-                                        <div className="text-white font-bold truncate">{group.ideas[0].businessType}</div>
+                                        <div className="text-sm font-bold text-white tracking-tight">{group.ideas[0].businessType}</div>
                                         {group.ideas.length > 1 && (
-                                            <div className="text-purple-400 text-[10px] mt-0.5 font-medium">+{group.ideas.length - 1} more community ideas</div>
+                                            <div className="flex items-center gap-1.5 mt-2 text-purple-400">
+                                                <div className="flex -space-x-2">
+                                                    {[...Array(Math.min(3, group.ideas.length - 1))].map((_, i) => (
+                                                        <div key={i} className="w-4 h-4 rounded-full bg-purple-500 border border-black flex items-center justify-center text-[6px]">
+                                                            {group.ideas[i + 1].author?.charAt(0) || 'U'}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <span className="text-[9px] font-bold">+{group.ideas.length - 1} community ideas</span>
+                                            </div>
                                         )}
                                     </div>
                                 </motion.div>
@@ -397,7 +436,6 @@ function MapInner() {
                         </motion.div>
                     </AdvancedMarker>
                 )}
-
             </GoogleMap>
 
             {/* AI Assistant FAB */}
@@ -431,6 +469,35 @@ function MapInner() {
                 )}
             </AnimatePresence>
 
+            <Dashboard
+                onSelectPin={(pin: RenovationPin) => {
+                    console.log("[CivicSense] Dashboard navigating to ID:", pin.id, "Name:", pin.businessType);
+
+                    // Prioritize exact group match by ID to avoid snapping to wrong ideas
+                    const match = Object.values(groupedPins).find(g =>
+                        g.ideas.some(i => i.id === pin.id)
+                    );
+
+                    const targetLat = match ? match.lat : Number(pin.lat);
+                    const targetLng = match ? match.lng : Number(pin.lng);
+
+                    console.log("[CivicSense] Navigating to target:", { targetLat, targetLng }, "Match Found:", !!match);
+
+                    // 1. Reactive state update (Fallback/Visual Sync)
+                    setMapData({ lat: targetLat, lng: targetLng, zoom: 18 });
+
+                    // 2. Imperative movement
+                    if (map) {
+                        map.panTo({ lat: targetLat, lng: targetLng });
+                        map.setZoom(18);
+                    }
+
+                    // 3. Focus Gallery
+                    setSelectedIdeaId(pin.id);
+                    setSelectedLocation({ lat: targetLat, lng: targetLng });
+                }}
+            />
+
             <SidePanel
                 isOpen={!!tempPin}
                 location={tempPin}
@@ -438,27 +505,26 @@ function MapInner() {
                 onSuccess={handlePinCreated}
                 onAiAction={handleAiResponse}
                 placeName={selectedPlaceName}
+                refiningIdea={refiningIdea}
             />
 
             <IdeaGallery
                 isOpen={!!selectedLocation}
-                onClose={() => setSelectedLocation(null)}
+                onClose={() => {
+                    setSelectedLocation(null);
+                    setSelectedIdeaId(null);
+                }}
                 location={selectedLocation}
                 ideas={activeIdeasForLocation}
-                onIdeaUpdated={fetchPins}
-            />
-            <VisionGallery
-                pins={pins}
-                onSelectPin={(pin: RenovationPin) => {
-                    const { lat, lng } = pin;
-                    setMapData(prev => ({ ...prev, lat, lng, zoom: 18 }));
-                    if (map) {
-                        map.setCenter({ lat, lng });
-                        map.setZoom(18);
-                    }
-                    setSelectedLocation({ lat, lng });
+                onIdeaUpdated={() => { }}
+                initialIdeaId={selectedIdeaId}
+                onAddDetails={(idea) => {
+                    setRefiningIdea(idea);
+                    setTempPin({ lat: idea.lat, lng: idea.lng });
+                    setSelectedLocation(null);
+                    setSelectedPlaceName(idea.businessType);
                 }}
             />
-        </div>
+        </div >
     );
 }

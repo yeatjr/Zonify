@@ -4,10 +4,16 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Activity, MapPin, TrendingUp, AlertTriangle, ChevronRight, Loader2, LogIn, LogOut } from 'lucide-react';
+import { Activity, MapPin, TrendingUp, AlertTriangle, ChevronRight, Loader2, LogIn, LogOut, Image as ImageIcon } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { getImageSrc } from '@/lib/utils';
 
-export default function Dashboard() {
+interface DashboardProps {
+    onSelectPin?: (pin: any) => void;
+    className?: string;
+}
+
+export default function Dashboard({ onSelectPin, className }: DashboardProps) {
     const [recentPins, setRecentPins] = useState<any[]>([]);
     const [reportData, setReportData] = useState<any>(null);
     const [loadingReport, setLoadingReport] = useState(false);
@@ -39,9 +45,9 @@ export default function Dashboard() {
     };
 
     return (
-        <div className="absolute top-4 left-4 z-10 w-80 md:w-96 flex flex-col gap-4 pointer-events-none">
+        <div className={`absolute top-4 left-4 z-[110] w-72 md:w-80 flex flex-col gap-3 pointer-events-auto ${className || ''}`}>
 
-            {/* Header Widget */}
+            {/* Header Widget - RESTORED TO ORIGINAL STYLE */}
             <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -91,35 +97,73 @@ export default function Dashboard() {
                 </div>
             </motion.div>
 
-            {/* Recent Activity Widget */}
+            {/* Recent Activity Widget - NOW IN MIDDLE */}
             <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.1 }}
-                className="backdrop-blur-xl bg-black/40 border border-white/10 rounded-2xl p-5 shadow-2xl pointer-events-auto flex flex-col gap-3 max-h-[40vh] overflow-y-auto custom-scrollbar"
+                className="backdrop-blur-xl bg-black/40 border border-white/10 rounded-2xl shadow-2xl pointer-events-auto flex flex-col overflow-hidden max-h-[45vh]"
             >
-                <div className="flex justify-between items-center sticky top-0 bg-transparent">
-                    <h2 className="text-sm font-semibold text-white/90 flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-purple-400" />
+                <div className="p-4 border-b border-white/5 bg-black/40 backdrop-blur-md sticky top-0 z-10 flex justify-between items-center">
+                    <h2 className="text-xs font-black text-white/90 flex items-center gap-2 uppercase tracking-[0.2em]">
+                        <TrendingUp className="w-3.5 h-3.5 text-purple-400" />
                         Recent Suggestions
                     </h2>
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                 </div>
 
-                <div className="space-y-3 mt-2">
+                <div className="p-4 space-y-3 overflow-y-auto custom-scrollbar">
                     {recentPins.length === 0 ? (
-                        <p className="text-xs text-gray-500 italic text-center py-4">No recent pins. Drop one!</p>
+                        <p className="text-[10px] text-gray-500 italic text-center py-6">No suggestions found. Be the first!</p>
                     ) : (
-                        recentPins.map((pin) => (
-                            <div key={pin.id} className="bg-white/5 border border-white/5 rounded-xl p-3 hover:bg-white/10 transition-colors">
-                                <div className="flex justify-between items-start mb-1">
-                                    <span className="text-xs font-bold text-blue-300 truncate max-w-[140px]">{pin.businessType}</span>
-                                    <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${pin.saturationIndex > 5 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
-                                        S: {pin.saturationIndex?.toFixed(1) || 'N/A'}
+                        (() => {
+                            const grouped: any[] = [];
+                            recentPins.forEach(pin => {
+                                const key = `${pin.lat?.toFixed(5)},${pin.lng?.toFixed(5)}_${pin.businessType}`;
+                                const existing = grouped.find(g => g._groupKey === key);
+                                if (existing) {
+                                    existing._count = (existing._count || 1) + 1;
+                                } else {
+                                    grouped.push({ ...pin, _groupKey: key, _count: 1 });
+                                }
+                            });
+
+                            return grouped.map((pin) => (
+                                <button
+                                    key={pin.id}
+                                    onClick={() => {
+                                        console.log("[CivicSense] Navigating to:", pin.businessType);
+                                        onSelectPin?.(pin);
+                                    }}
+                                    className="w-full text-left bg-white/[0.03] border border-white/5 rounded-xl p-3 hover:bg-white/10 transition-all group/card cursor-pointer border-l-2 border-l-transparent hover:border-l-purple-500 relative z-20"
+                                >
+                                    <div className="flex gap-3">
+                                        {pin.visionImage && (
+                                            <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-white/10 shadow-lg relative">
+                                                <img
+                                                    src={getImageSrc(pin.visionImage)}
+                                                    alt="AI Vision"
+                                                    className="w-full h-full object-cover group-hover/card:scale-110 transition-transform duration-500"
+                                                />
+                                                {pin._count > 1 && (
+                                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                                        <span className="text-[9px] font-black text-white">x{pin._count}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex justify-between items-start mb-1">
+                                                <span className="text-[11px] font-black text-blue-300 truncate uppercase tracking-tight">{pin.businessType}</span>
+                                                <div className={`text-[8px] font-black px-1.5 py-0.5 rounded-md shrink-0 ml-2 ${pin.saturationIndex > 5 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
+                                                    {pin.saturationIndex?.toFixed(1) || 'N/A'}
+                                                </div>
+                                            </div>
+                                            <p className="text-[10px] text-gray-500 line-clamp-2 leading-tight italic">"{pin.review}"</p>
+                                        </div>
                                     </div>
-                                </div>
-                                <p className="text-xs text-gray-400 line-clamp-2">{pin.review}</p>
-                            </div>
-                        ))
+                                </button>
+                            ));
+                        })()
                     )}
                 </div>
             </motion.div>

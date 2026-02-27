@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { buildImagePrompt, resolvePlaceScene } from '@/lib/vision';
+import fs from 'fs';
+import path from 'path';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -19,7 +21,7 @@ export async function POST(req: NextRequest) {
         let envAnalysis = null;
         if (streetView) {
             try {
-                const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -42,7 +44,7 @@ export async function POST(req: NextRequest) {
         let satelliteAnalysis = null;
         if (satellite) {
             try {
-                const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -111,9 +113,37 @@ export async function POST(req: NextRequest) {
             }
         }
 
+        let visionUrl = null;
+        if (base64Image) {
+            try {
+                const visionsDir = path.join(process.cwd(), 'public', 'visions');
+
+                // Ensure the directory exists
+                if (!fs.existsSync(visionsDir)) {
+                    fs.mkdirSync(visionsDir, { recursive: true });
+                }
+
+                const filename = `${Date.now()}_generated.jpg`;
+                const filePath = path.join(visionsDir, filename);
+
+                // Convert base64 to buffer and save to file
+                const buffer = Buffer.from(base64Image, 'base64');
+                fs.writeFileSync(filePath, buffer);
+
+                // The URL that will be stored in Firestore and loaded by the browser
+                visionUrl = `/visions/${filename}`;
+
+                console.log(`[CivicSense Vision] Image saved locally: ${filePath}`);
+            } catch (err: any) {
+                console.error('[CivicSense Vision] Local save failed:', err);
+                visionUrl = null;
+            }
+        }
+
         return NextResponse.json({
             success: true,
-            imageBase64: base64Image,
+            visionUrl: visionUrl,
+            error: !visionUrl && base64Image ? "Local save failed - Check server logs" : null,
             analysis: { envAnalysis, satelliteAnalysis }
         });
 

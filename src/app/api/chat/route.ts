@@ -5,7 +5,7 @@ const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "dummy-key");
 
 export async function POST(req: Request) {
     try {
-        const { messages, location, placeName } = await req.json();
+        const { messages, location, placeName, refiningIdea } = await req.json();
 
         if (!messages || !Array.isArray(messages)) {
             return NextResponse.json({ error: "Invalid messages array" }, { status: 400 });
@@ -47,6 +47,7 @@ Notes:
 - Use "REJECTED" if it hits the realistic filter.
 - Use "VALIDATED" ONLY when you have all details and approve the idea. When VALIDATED, you MUST populate "idea_title", "idea_description" (summarizing the building details constraints), and "author".
 - Current active location: ${placeName || "Unknown"} at coordinates ${JSON.stringify(location)}
+${refiningIdea ? `- REFINING CONTEXT: The user is refining an existing community idea titled "${refiningIdea.businessType}" with description: "${refiningIdea.review}". Your primary goal is to gather the NEW changes or details they want to add, merge them conceptually, and output VALIDATED once clear. Do not ask for their name if they just want to add architectural details.` : ''}
 `;
 
         // Generate history for the chat
@@ -87,9 +88,9 @@ Notes:
 
         const generateMockOutput = (lastMsg: string) => {
             const msg = lastMsg.toLowerCase();
-            
+
             // Check for potential loops in the conversation history
-            const repeatedIntent = messages.filter(m => 
+            const repeatedIntent = messages.filter(m =>
                 m.role === 'user' && (m.text?.toLowerCase().includes('library') || m.text?.toLowerCase().includes('skyscraper'))
             ).length;
 
@@ -123,8 +124,8 @@ Notes:
             outputText = generateMockOutput(finalPrompt);
         } else {
             try {
-                console.log("[CivicSense API] Calling Gemini 2.0 Flash Exp (Direct REST)...");
-                
+                console.log("[CivicSense API] Calling Gemini 2.5 Flash (Direct REST)...");
+
                 // Format history for REST API
                 const restContents = [
                     { role: 'user', parts: [{ text: `SYSTEM INSTRUCTIONS: ${systemInstruction}\n\nUNDERSTOOD. I will act as the CivicSense Agent.` }] },
@@ -135,7 +136,7 @@ Notes:
                     }))
                 ];
 
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -154,7 +155,7 @@ Notes:
                 outputText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
             } catch (error: any) {
-                console.error("[CivicSense API] Gemini 2.0 Exp Failed:", error.message);
+                console.error("[CivicSense API] Gemini 2.5 Failed:", error.message);
                 console.log("[CivicSense API] Falling back to Mock Output...");
                 outputText = generateMockOutput(finalPrompt);
             }

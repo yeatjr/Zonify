@@ -4,6 +4,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { RenovationPin } from './Map';
 import { Bot, MapPin } from 'lucide-react';
+import { getImageSrc } from '@/lib/utils';
 
 interface VisionGalleryProps {
     pins: RenovationPin[];
@@ -27,7 +28,7 @@ export default function VisionGallery({ pins, onSelectPin }: VisionGalleryProps)
                         className="flex-shrink-0 w-48 h-32 relative rounded-2xl overflow-hidden border border-white/20 shadow-xl group bg-black"
                     >
                         <img
-                            src={`data:image/jpeg;base64,${pin.visionImage}`}
+                            src={getImageSrc(pin.visionImage)}
                             alt={pin.businessType}
                             className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity"
                         />
