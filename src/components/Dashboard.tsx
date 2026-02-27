@@ -29,7 +29,7 @@ export default function Dashboard({ onSelectPin, className }: DashboardProps) {
     }, []);
 
     return (
-        <div className={`absolute top-4 left-4 z-[110] w-80 md:w-96 max-h-[calc(100vh-2rem)] flex flex-col gap-4 pointer-events-none ${className || ''}`}>
+        <div className={`absolute top-4 left-4 z-50 w-80 md:w-96 max-h-[calc(100vh-2rem)] flex flex-col gap-4 pointer-events-none ${className || ''}`}>
 
             {/* Header Widget - RESTORED TO ORIGINAL STYLE */}
             <motion.div

@@ -21,6 +21,7 @@ export type RenovationPin = {
     saturationIndex: number | null;
     visionImage?: string;
     author?: string;
+    agreementCount?: number;
 };
 
 // A dark mode theme for Google Maps
@@ -170,7 +171,6 @@ function MapInner() {
     // Map hooks must be declared before callbacks
     const map = useMap();
     const placesLib = useMapsLibrary('places');
-    const geocodingLib = useMapsLibrary('geocoding');
 
     const handleAiResponse = (action: any) => {
         if (action.map_action === "MOVE_TO" && action.coordinates) {
@@ -230,11 +230,10 @@ function MapInner() {
 
 
     const handleMapClick = useCallback((e: any) => {
-        if (!map || !placesLib || !geocodingLib) {
+        if (!map || !placesLib) {
             console.log("[CivicSense] Map dependencies not ready:", {
                 map: !!map,
-                places: !!placesLib,
-                geocoding: !!geocodingLib
+                places: !!placesLib
             });
             return;
         }
@@ -270,10 +269,10 @@ function MapInner() {
             console.log("[CivicSense] Searching for context at", loc);
 
             // Priority 1: Geocode for Area/Neighborhood Name
-            const geocoder = new geocodingLib.Geocoder();
+            const geocoder = new google.maps.Geocoder();
             geocoder.geocode({ location: loc }, (gResults: any, gStatus: any) => {
                 console.log("[CivicSense] Geocode status:", gStatus);
-                const isGeoOk = (gStatus as any) === 'OK' || (gStatus as any) === (geocodingLib as any).GeocoderStatus.OK;
+                const isGeoOk = gStatus === 'OK' || gStatus === google.maps.GeocoderStatus.OK;
 
                 if (isGeoOk && gResults?.[0]) {
                     const result = gResults[0];
@@ -350,7 +349,7 @@ function MapInner() {
             console.log("[CivicSense] Background click at:", latLngObj);
             findNearestBusiness(latLngObj, service);
         }
-    }, [user, map, placesLib, geocodingLib, tempPin, pendingPin]);
+    }, [user, map, placesLib, tempPin, pendingPin]);
 
     const handleCancel = () => {
         setTempPin(null);
@@ -394,6 +393,11 @@ function MapInner() {
         acc[key].ideas.push(pin);
         return acc;
     }, {} as Record<string, { lat: number, lng: number, mainPinId: string, ideas: RenovationPin[] }>);
+
+    // Sort ideas inside groups by agreementCount to showcase best iterations on Map Tooltips
+    Object.values(groupedPins).forEach(group => {
+        group.ideas.sort((a, b) => (b.agreementCount || 0) - (a.agreementCount || 0));
+    });
 
     const activeIdeasForLocation = selectedLocation
         ? groupedPins[`${selectedLocation.lat.toFixed(6)},${selectedLocation.lng.toFixed(6)}`]?.ideas || []
@@ -616,6 +620,19 @@ function MapInner() {
                     setTempPin({ lat: idea.lat, lng: idea.lng });
                     setSelectedLocation(null);
                     setSelectedPlaceName(idea.businessType);
+                }}
+                onAddNewIdea={() => {
+                    if (!user) {
+                        loginWithGoogle();
+                        return;
+                    }
+                    if (selectedLocation) {
+                        setTempPin(selectedLocation);
+                    }
+                    setRefiningIdea(null);
+                    setSelectedLocation(null);
+                    setSelectedIdeaId(null);
+                    setSelectedPlaceName(null);
                 }}
             />
         </div>
