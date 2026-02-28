@@ -2,6 +2,13 @@
 
 **Zonify** is an AI-powered urban planning collaborator that bridges the gap between community ideas and formal development. By combining the **Google Maps Platform** with **Google Gemini AI**, it transforms unstructured user input into professional-grade, structured architectural proposals.
 
+## 🌍 Sustainable Development Goals (SDG) Alignment
+### 🏗 SDG 9 – Industry, Innovation and Infrastructure
+Zonify supports SDG 9 by using AI-powered site audits to improve infrastructure planning, automate feasibility evaluation, and promote innovative, resilient urban development.
+
+### 🏙 SDG 11 – Sustainable Cities and Communities
+Zonify supports SDG 11 by democratizing urban planning through open-access proposal submission, AI-assisted idea structuring, and transparent evaluation, enabling inclusive and community-driven city development.
+
 ---
 
 ## 1. Technical Architecture
