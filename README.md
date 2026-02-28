@@ -9,7 +9,7 @@ The platform enables users to convert informal civic ideas into structured propo
 Zonify does not replace professional urban planning or engineering approval processes. <br>
 Instead, it lowers the barrier for initiating structured civic proposals and improves early-stage communication between communities and potential adopters. <br>
 
-**Now, ready to step into Zonify and see how AI transforms urban planning🚀🏙️.**
+**Now, step into Zonify and discover how AI transforms urban planning.🚀🏙️.**
 
 ---
 
