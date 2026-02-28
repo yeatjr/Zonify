@@ -26,12 +26,10 @@ The reasoning and structuring engine powered by **Google Gemini** and is respons
 * Cloud Firestore - Stores structured proposal records, maintains version history and supports real-time map pin storage
 * Firebase Authentication - Manages user identity, handles role differentiation and provides secure sign-in
 - Security rules restrict editing access to authorized users to ensures traceability, authorship recognition, and data integrity
-- 
+
 **Data Persistence Strategy**
 *  Validated “pitched” ideas use **Base64 data URLs**
-*  Base64 strings stored directly in:
-  - Pins collection
-  - Comments collection in Firestore
+*  Base64 strings stored directly in **Pins collection** and **Comments collection** in Firestore
 * Proposal data and visual pitch saved together in a single database write
 
 **PDF Report Handling**
