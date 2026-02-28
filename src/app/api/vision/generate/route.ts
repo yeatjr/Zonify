@@ -91,6 +91,13 @@ export async function POST(req: NextRequest) {
             genBody.contents[0].parts.push({ inlineData: { mimeType: 'image/jpeg', data: satellite } } as any);
         }
 
+        console.log(`[CivicSense Vision] Starting generation for: ${placeName}`);
+        if (!VISION_KEY) {
+            console.error('[CivicSense Vision] CRITICAL: GEMINI_API_KEY is missing in environment variables!');
+            return NextResponse.json({ error: 'API Key missing' }, { status: 500 });
+        }
+
+        // ... existing code ...
         const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=${VISION_KEY}`,
             { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(genBody) }
@@ -98,8 +105,8 @@ export async function POST(req: NextRequest) {
 
         if (!response.ok) {
             const error = await response.text();
-            console.error('Gemini Vision Error:', error);
-            return NextResponse.json({ error: 'Image generation failed', details: error }, { status: 500 });
+            console.error(`[CivicSense Vision] API Request Failed (${response.status}):`, error);
+            return NextResponse.json({ error: 'Image generation failed', details: error }, { status: response.status });
         }
 
         const result = await response.json();

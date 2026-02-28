@@ -313,7 +313,7 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                     animate={{ x: 0, opacity: 1 }}
                     exit={{ x: '100%', opacity: 0 }}
                     transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                    className="absolute top-0 right-0 w-80 md:w-96 h-full z-20 flex flex-col shadow-2xl backdrop-blur-xl bg-white/10 dark:bg-black/40 border-l border-white/20 dark:border-white/10"
+                    className="absolute top-0 right-0 w-80 md:w-96 h-full z-20 flex flex-col shadow-2xl backdrop-blur-3xl bg-white/90 dark:bg-gray-900/95 border-l border-white/20 dark:border-white/10"
                 >
                     {/* Header */}
                     <div className="p-5 border-b border-white/10 flex justify-between items-center bg-black/20">
@@ -456,13 +456,13 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                                 animate={{ opacity: 1, y: 0 }}
                                 className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
                             >
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${msg.role === 'user' ? 'bg-blue-600/50' : 'bg-purple-600/50'
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${msg.role === 'user' ? 'bg-blue-600/50' : 'bg-purple-600'
                                     }`}>
-                                    {msg.role === 'user' ? <User className="w-4 h-4 text-blue-200" /> : <Bot className="w-4 h-4 text-purple-200" />}
+                                    {msg.role === 'user' ? <User className="w-4 h-4 text-white" /> : <Bot className="w-4 h-4 text-white" />}
                                 </div>
-                                <div className={`text-sm py-2 px-3 rounded-2xl max-w-[80%] leading-relaxed ${msg.role === 'user'
+                                <div className={`text-sm py-3 px-4 rounded-2xl max-w-[85%] leading-relaxed shadow-sm ${msg.role === 'user'
                                     ? 'bg-blue-600 text-white rounded-tr-sm'
-                                    : 'bg-white/10 text-gray-200 border border-white/10 rounded-tl-sm'
+                                    : 'bg-white border border-gray-100 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-gray-100 rounded-tl-sm'
                                     }`}>
                                     {msg.text}
                                     {msg.imageBase64 && (
