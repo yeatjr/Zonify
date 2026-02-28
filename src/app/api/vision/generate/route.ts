@@ -115,6 +115,15 @@ export async function POST(req: NextRequest) {
         if (!response.ok) {
             const error = await response.text();
             console.error(`[CivicSense Vision] API Request Failed (${response.status}):`, error);
+
+            if (response.status === 429) {
+                return NextResponse.json({
+                    success: false,
+                    error: 'QUOTA_EXCEEDED',
+                    message: 'AI Generation Quota Reached. Please try again in 1 minute or check Google AI Studio.'
+                }, { status: 429 });
+            }
+
             return NextResponse.json({ error: 'Image generation failed', details: error }, { status: response.status });
         }
 

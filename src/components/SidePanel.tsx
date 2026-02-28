@@ -199,24 +199,29 @@ export default function SidePanel({ isOpen, onCancel, location, placeName, onAiA
                         const controller = new AbortController();
                         const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-                        const visionRes = await fetch('/api/vision/generate', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            signal: controller.signal,
-                            body: JSON.stringify({
-                                text: action.idea_description || userText,
-                                location,
-                                streetView: svBase64,
-                                satellite: satBase64,
-                                placeName: action.idea_title,
-                                placeTypes: []
-                            })
-                        });
+                        let visionData = null;
+                        try {
+                            const vRes = await fetch('/api/vision/generate', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                signal: controller.signal,
+                                body: JSON.stringify({
+                                    text: action.idea_description || userText,
+                                    location,
+                                    streetView: svBase64,
+                                    satellite: satBase64,
+                                    placeName: action.idea_title,
+                                    placeTypes: []
+                                })
+                            });
+                            visionData = await vRes.json();
+                        } catch (e) {
+                            console.error("[SidePanel] Vision fetch failed:", e);
+                        }
+
                         clearTimeout(timeoutId);
 
-                        const visionData = await visionRes.json();
-                        console.log("[SidePanel] Vision API returned data:", !!visionData);
-                        if (visionData.success) {
+                        if (visionData?.success) {
                             const rawVision = visionData.visionUrl || visionData.base64;
                             if (rawVision) {
                                 finalVisionImage = await compressBase64(rawVision);
@@ -311,9 +316,10 @@ export default function SidePanel({ isOpen, onCancel, location, placeName, onAiA
                         }]);
                     }
                     else {
+                        const isQuota = messages.some(m => m.text.includes('cooldown') || m.text.includes('quota'));
                         setMessages(prev => [...prev, {
                             role: 'model',
-                            text: 'Your proposal has been successfully saved to the map! (Note: 3D Vision generation is currently offline due to free-tier quotas).'
+                            text: visionLoading ? 'Your proposal has been saved! 🚀 (The 3D vision is currently on cooldown due to high demand).' : 'Your proposal has been successfully saved to the map!'
                         }]);
                     }
 
