@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' });
 
 export const metadata: Metadata = {
-  title: 'CivicSense | Community-Driven Urban Planning',
+  title: 'Zonify | Community-Driven Urban Planning',
   description: 'Propose and analyze neighborhood renovations with AI.',
 };
 

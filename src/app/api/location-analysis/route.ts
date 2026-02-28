@@ -38,7 +38,7 @@ export async function POST(req: Request) {
             communityContext = `No community ideas found nearby yet. You must set "User Suggestion" to null because there are no actual user suggestions tagged.`;
         }
 
-        const prompt = `You are the CivicSense AI Architect. Analyze the geographic location at Latitude: ${lat}, Longitude: ${lng}.
+        const prompt = `You are the Zonify AI Architect. Analyze the geographic location at Latitude: ${lat}, Longitude: ${lng}.
 Context of surroundings (10km radius): ${contextData || "Assume a mix of urban/suburban layout."}
 ${communityContext}
 
@@ -46,15 +46,19 @@ Provide a deep location analysis separated exactly into 4 parts, plus a quantifi
 1. "Planning Feasibility": Analyze the feasibility of developing this area (zoning, economic potential, community value).
 2. "AI Site Audit": A detailed description of the detected surroundings, buildings, and environment within a 10km radius.
 3. "Suitable Facilities": Analyze what equipment, buildings, or infrastructure (like a gym room, football court, community center, etc.) would be highly suitable for this specific place and demographics.
-4. "User suggestion": Summarize the specific ideas and sentiment from the actual community members (if provided). If there are NO nearby community ideas provided, this entire object MUST be strictly null.
-
 Return the response STRICTLY as a JSON object with keys:
-"planningFeasibility", "aiSiteAudit", "suitableFacilities", "userSuggestion", and "scores" (array).
-The "scores" array must contain exactly 5 objects mapping fundamental overall feasibility categories to numbers out of 100. Example: "scores": [{ "category": "Economic Potential", "score": 85 }]
+"overallScore", "planningFeasibility", "aiSiteAudit", "suitableFacilities", "userSuggestion", and "scores" (array).
+The "overallScore" must be a number from 0-100 representing the "Adaptive Resilience Score" of this area.
+CRITICAL: The "overallScore" must be calculated ONLY based on the first 3 pillars (Planning, Site Audit, Facilities). Do NOT include "userSuggestion" (Priority Intervention) in this mathematical average; it serves as an independent validation.
 
-EACH of the 4 section keys MUST be an object itself (or null for userSuggestion) containing:
+EACH of the first 3 section keys (planningFeasibility, aiSiteAudit, suitableFacilities) MUST be an object containing:
+- "summary": A concise (1-2 sentence) executive summary of the innovation potential in this category.
+- "adaptiveResilienceScore": A score from 0-100 for this specific category's innovation contribution.
 - "narrative": String containing the Markdown-formatted detailed text analysis.
-- "subMetrics": Array of exactly 3 objects mapping specific granular factors relevant to this section to a score. Example: [{"name": "Green Space", "score": 60}, {"name": "Transit Access", "score": 85}, {"name": "Density", "score": 70}]
+- "subMetrics": Array of exactly 3 objects mapping specific granular factors to a score. Use precise terminology (e.g., "Zoning Compatibility", "Market Catalyst Potential", "Social Cohesion Impact").
+
+"userSuggestion": If present, it MUST follow the SAME object structure as the first 3 sections (summary, adaptiveResilienceScore, narrative, subMetrics). Change "Community Sentiment" heading in narrative to "Public Demand Analysis".
+The "scores" array should contain at least 5 relevant metrics from the 9 core pillars.
 
 Do not include markdown blocks or any other text outside the JSON.`;
 

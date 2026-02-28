@@ -59,8 +59,8 @@ export default function Home() {
   const [isAnalysisMode, setIsAnalysisMode] = useState(false);
   const [selectedPin, setSelectedPin] = useState<any>(null);
 
-  // New states for location analysis
   const [analysisState, setAnalysisState] = useState<'idle' | 'running' | 'done'>('idle');
+  const [analysisLocation, setAnalysisLocation] = useState<{ lat: number, lng: number } | null>(null);
   const [analysisData, setAnalysisData] = useState<any>(null);
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const [analysisPlaceName, setAnalysisPlaceName] = useState<string>('Location Deep Analysis: 10km Radius');
@@ -103,10 +103,126 @@ export default function Home() {
       // Title
       const safeTitle = sanitizeText(analysisPlaceName);
       pdf.setTextColor(250, 204, 21); // yellow-400
-      pdf.setFontSize(16);
+      pdf.setFontSize(20);
       pdf.setFont("helvetica", "bold");
-      pdf.text(`${safeTitle} Deep Analysis`, margin, yPos);
-      yPos += 12;
+      pdf.text("ADAPTIVE RESILIENCE PROFILE", margin, yPos);
+      yPos += 8;
+
+      pdf.setTextColor(150, 150, 150);
+      pdf.setFontSize(10);
+      pdf.setFont("helvetica", "normal");
+      pdf.text(safeTitle.toUpperCase(), margin, yPos);
+      yPos += 15;
+
+      // Innovation Capability Score & Pie Chart Section
+      checkPageBreak(80);
+
+      // Box for scores
+      pdf.setFillColor(25, 25, 25);
+      pdf.roundedRect(margin, yPos, contentWidth, 75, 5, 5, 'F');
+
+      // Overall Metric
+      pdf.setTextColor(250, 204, 21);
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("ADAPTIVE RESILIENCE SCORE", margin + 10, yPos + 15);
+
+      pdf.setFontSize(40);
+      pdf.text(`${analysisData.overallScore || 0}`, margin + 10, yPos + 35);
+      pdf.setFontSize(12);
+      pdf.text("/100", margin + 40, yPos + 35);
+
+      // Pie Chart Approximation
+      const chartCenterX = pageWidth - margin - 40;
+      const chartCenterY = yPos + 35;
+      const radius = 25;
+
+      const metrics = [
+        { label: 'Planning', score: analysisData.planningFeasibility?.adaptiveResilienceScore || 0, color: [192, 132, 252] },
+        { label: 'Site Audit', score: analysisData.aiSiteAudit?.adaptiveResilienceScore || 0, color: [96, 165, 250] },
+        { label: 'Facilities', score: analysisData.suitableFacilities?.adaptiveResilienceScore || 0, color: [251, 146, 60] }
+      ];
+
+      const totalScore = metrics.reduce((acc, m) => acc + m.score, 0);
+      let currentAngle = 0;
+
+      metrics.forEach((m, idx) => {
+        const sliceAngle = (m.score / (totalScore || 1)) * 2 * Math.PI;
+        pdf.setFillColor(m.color[0], m.color[1], m.color[2]);
+
+        // Simpler segment drawing using triangles for compatibility
+        const segments = 20;
+        for (let i = 0; i < segments; i++) {
+          const ang1 = currentAngle + (i / segments) * sliceAngle;
+          const ang2 = currentAngle + ((i + 1) / segments) * sliceAngle;
+
+          pdf.triangle(
+            chartCenterX, chartCenterY,
+            chartCenterX + Math.cos(ang1) * radius, chartCenterY + Math.sin(ang1) * radius,
+            chartCenterX + Math.cos(ang2) * radius, chartCenterY + Math.sin(ang2) * radius,
+            'F'
+          );
+        }
+
+        // Legend
+        const legendX = margin + 10;
+        const legendY = yPos + 45 + (idx * 6);
+        pdf.setFillColor(m.color[0], m.color[1], m.color[2]);
+        pdf.rect(legendX, legendY - 3, 3, 3, 'F');
+        pdf.setTextColor(200, 200, 200);
+        pdf.setFontSize(8);
+        pdf.text(`${m.label}: ${m.score}%`, legendX + 5, legendY);
+
+        currentAngle += sliceAngle;
+      });
+
+      yPos += 85;
+
+      // Executive Summaries
+      checkPageBreak(50);
+
+      // Moving Priority Intervention summary to top if exists (under header)
+      if (analysisData.userSuggestion) {
+        pdf.setFillColor(40, 40, 20); // Dark yellow-ish
+        pdf.roundedRect(margin, yPos, contentWidth, 30, 3, 3, 'F');
+        pdf.setTextColor(250, 204, 21); // yellow-400
+        pdf.setFontSize(10);
+        pdf.setFont("helvetica", "bold");
+        pdf.text("PRIORITY INTERVENTION: COMMUNITY VISION", margin + 5, yPos + 8);
+        pdf.setFontSize(8);
+        pdf.setTextColor(200, 200, 200);
+        const lines = pdf.splitTextToSize(sanitizeText(analysisData.userSuggestion.summary || ""), contentWidth - 10);
+        pdf.text(lines, margin + 5, yPos + 14);
+        yPos += 35;
+      }
+
+      pdf.setTextColor(250, 204, 21);
+      pdf.setFontSize(11);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("EXECUTIVE SUMMARIES", margin, yPos);
+      yPos += 10;
+
+      [
+        { title: "Planning Feasibility", text: analysisData.planningFeasibility?.summary, color: [192, 132, 252] },
+        { title: "AI Site Audit", text: analysisData.aiSiteAudit?.summary, color: [96, 165, 250] },
+        { title: "Suitable Facilities", text: analysisData.suitableFacilities?.summary, color: [251, 146, 60] }
+      ].forEach(sum => {
+        if (!sum.text) return;
+        pdf.setTextColor(sum.color[0], sum.color[1], sum.color[2]);
+        pdf.setFontSize(9);
+        pdf.setFont("helvetica", "bold");
+        pdf.text(sum.title.toUpperCase(), margin, yPos);
+        yPos += 5;
+
+        pdf.setTextColor(220, 220, 220);
+        pdf.setFontSize(9);
+        pdf.setFont("helvetica", "normal");
+        const lines = pdf.splitTextToSize(sanitizeText(sum.text), contentWidth);
+        pdf.text(lines, margin, yPos);
+        yPos += (lines.length * 5) + 5;
+      });
+
+      yPos += 5;
 
       const drawProgressBar = (label: string, score: number) => {
         checkPageBreak(12);
@@ -120,7 +236,7 @@ export default function Home() {
         yPos += 3;
         // Background track
         pdf.setFillColor(40, 40, 40);
-        pdf.roundedRect(margin, yPos, contentWidth, 3, 1, 1, 'F');
+        pdf.roundedRect(margin, yPos, contentWidth, 2, 0.5, 0.5, 'F');
 
         // Fill
         if (score > 75) pdf.setFillColor(34, 197, 94); // Green
@@ -129,24 +245,12 @@ export default function Home() {
 
         const fillWidth = (contentWidth * Math.max(0, Math.min(100, score))) / 100;
         if (fillWidth > 0) {
-          pdf.roundedRect(margin, yPos, fillWidth, 3, 1, 1, 'F');
+          pdf.roundedRect(margin, yPos, fillWidth, 2, 0.5, 0.5, 'F');
         }
         yPos += 8;
       };
 
-      // Global Scores
-      if (analysisData.scores && Array.isArray(analysisData.scores)) {
-        checkPageBreak(10);
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(10);
-        pdf.text("FEASIBILITY METRICS", margin, yPos);
-        yPos += 8;
-
-        analysisData.scores.forEach((item: any) => {
-          drawProgressBar(item.category, item.score);
-        });
-        yPos += 5;
-      }
+      // Global Scores list removed as requested, we now use the summaries and detailed sections below.
 
       const drawSection = (title: string, sectionData: any, titleColor: number[]) => {
         if (!sectionData) return;
@@ -223,6 +327,7 @@ export default function Home() {
 
   const handleRunAnalysis = async (location: { lat: number, lng: number }, nearbyPins: any[] = [], placeName: string = "New Opportunity") => {
     setAnalysisState('running');
+    setAnalysisLocation(location);
     setAnalysisData(null);
     setAnalysisPlaceName(placeName);
     setShowAnalysisModal(false);
@@ -235,7 +340,14 @@ export default function Home() {
       });
       const data = await res.json();
       setAnalysisData(data);
-      const historyRecord = { data, placeName, date: new Date().toLocaleString(), lat: location.lat, lng: location.lng };
+
+      const historyRecord = {
+        data: data,
+        placeName,
+        date: new Date().toLocaleString(),
+        lat: location.lat,
+        lng: location.lng
+      };
       setAnalysisHistory(prev => [historyRecord, ...prev]);
 
       try {
@@ -248,9 +360,11 @@ export default function Home() {
       } catch (dbErr) { console.error("Could not save to history:", dbErr) }
 
       setAnalysisState('done');
+      setAnalysisLocation(null);
     } catch (e) {
       console.error(e);
       setAnalysisState('idle');
+      setAnalysisLocation(null);
     }
   };
 
@@ -266,8 +380,11 @@ export default function Home() {
     <main className="w-full h-screen bg-black overflow-hidden relative font-sans text-white">
       <Map
         isAnalysisMode={isAnalysisMode && analysisState !== 'done'}
+        isAnalyzing={analysisState === 'running'}
+        analysisLocation={analysisLocation}
         onSelectPin={selectedPin}
         onRunAnalysis={handleRunAnalysis}
+        onGalleryClose={() => setSelectedPin(null)}
       />
 
       <Dashboard
@@ -285,8 +402,18 @@ export default function Home() {
 
       {/* Analysis Results Modal */}
       {showAnalysisModal && analysisData && (
-        <div className="absolute inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-black/80 border border-yellow-500/30 shadow-[0_20px_60px_rgba(234,179,8,0.2)] w-full max-w-2xl rounded-3xl p-6 relative flex flex-col max-h-[90vh]">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="bg-zinc-900/90 border border-yellow-500/30 shadow-[0_0_80px_rgba(234,179,8,0.15)] w-full max-w-2xl rounded-[2.5rem] p-8 relative flex flex-col max-h-[90vh] overflow-hidden backdrop-blur-2xl"
+          >
             <button
               onClick={() => setShowAnalysisModal(false)}
               className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white/50 hover:text-white transition-colors"
@@ -308,36 +435,69 @@ export default function Home() {
 
             <div id="analysis-report-content" className="overflow-y-auto custom-scrollbar pr-2 space-y-6 flex-1 text-sm bg-black/80 p-2">
 
-              {/* Data Visualization / Graphs */}
-              {analysisData.scores && Array.isArray(analysisData.scores) && (
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6">
-                  <h3 className="text-white/80 font-bold uppercase tracking-widest text-xs mb-5 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-                    Feasibility Metrics
-                  </h3>
+              {/* Innovation Capability Header */}
+              <div className="bg-gradient-to-br from-yellow-500/15 to-yellow-600/5 border border-yellow-500/30 rounded-3xl p-7 mb-6 flex items-center justify-between shadow-inner">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black text-yellow-500/80 uppercase tracking-[0.3em] mb-2">Project Feasibility Index</span>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-5xl font-black text-yellow-400 drop-shadow-lg tracking-tighter">{analysisData.overallScore || 0}</span>
+                    <span className="text-lg font-bold text-yellow-500/40">/100</span>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end text-right">
+                  <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mb-1">Adaptive Resilience Score</span>
+                  <div className="text-[11px] font-bold text-white/20 italic">Zonify Analysis v2.5</div>
+                </div>
+              </div>
+
+              {/* Simplified Priority Intervention Box Card - NOW YELLOW and Reordered */}
+              {analysisData.userSuggestion && (
+                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-2xl p-6 mb-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-black text-yellow-500/60 uppercase tracking-widest mb-1 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
+                        Priority Intervention Identified
+                      </span>
+                      <h3 className="text-lg font-black text-yellow-500 uppercase tracking-tight">Community Sentiment Profile</h3>
+                    </div>
+                    <div className="flex flex-col items-end text-right">
+                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Public Demand Analysis</span>
+                      <div className="text-xs font-bold text-white/20">Verified Community Consensus</div>
+                    </div>
+                  </div>
+
                   <div className="space-y-4">
-                    {analysisData.scores.map((item: any, idx: number) => (
-                      <div key={idx} className="flex flex-col gap-1.5">
-                        <div className="flex justify-between items-end">
-                          <span className="text-[10px] font-black tracking-wider text-gray-400 uppercase">{item.category}</span>
-                          <span className="text-[10px] font-black text-white">{item.score}/100</span>
-                        </div>
-                        <div className="w-full bg-white/5 rounded-full h-2.5 overflow-hidden ring-1 ring-inset ring-white/10">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${Math.min(100, Math.max(0, item.score))}%` }}
-                            transition={{ duration: 1.5, delay: idx * 0.1, ease: "easeOut" }}
-                            className={`h-full rounded-full bg-gradient-to-r ${item.score > 75 ? 'from-green-600 to-green-400' : item.score > 50 ? 'from-yellow-600 to-yellow-400' : 'from-red-600 to-red-400'}`}
-                          />
-                        </div>
-                      </div>
-                    ))}
+                    <p className="text-[12px] text-white/90 leading-relaxed italic border-l-2 border-yellow-500/30 pl-4 py-1 bg-yellow-500/5 rounded-r-lg">
+                      "{analysisData.userSuggestion.summary}"
+                    </p>
+
+                    <div className="text-[11px] text-gray-300 leading-relaxed opacity-80">
+                      {renderFormattedText(analysisData.userSuggestion.narrative || "")}
+                    </div>
                   </div>
                 </div>
               )}
 
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
-                <h3 className="text-purple-400 font-bold uppercase tracking-wider text-xs mb-3">Planning Feasibility</h3>
+              {/* Executive Summaries */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+                {[
+                  { title: "Planning", text: analysisData.planningFeasibility?.summary, color: "text-purple-400", bg: "bg-purple-500/10" },
+                  { title: "Audit", text: analysisData.aiSiteAudit?.summary, color: "text-blue-400", bg: "bg-blue-500/10" },
+                  { title: "Facilities", text: analysisData.suitableFacilities?.summary, color: "text-orange-400", bg: "bg-orange-500/10" }
+                ].map((s, idx) => (
+                  <div key={idx} className={`${s.bg} border border-white/5 rounded-xl p-3 flex flex-col gap-1.5`}>
+                    <span className={`text-[9px] font-black uppercase tracking-tighter ${s.color}`}>{s.title}</span>
+                    <p className="text-[11px] text-white/60 leading-tight italic line-clamp-3">"{s.text || 'No summary available.'}"</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-5 border-l-4 border-l-purple-500">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-purple-400 font-bold uppercase tracking-wider text-xs">Planning Feasibility</h3>
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded bg-purple-500/20 text-purple-400">{analysisData.planningFeasibility?.adaptiveResilienceScore || 0}/100</span>
+                </div>
                 {renderSubMetrics(analysisData.planningFeasibility?.subMetrics)}
                 <div className="text-gray-300 leading-relaxed">
                   {typeof analysisData.planningFeasibility === 'object' && analysisData.planningFeasibility !== null ? (
@@ -348,8 +508,11 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
-                <h3 className="text-blue-400 font-bold uppercase tracking-wider text-xs mb-3">AI Site Audit</h3>
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-5 border-l-4 border-l-blue-500">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-blue-400 font-bold uppercase tracking-wider text-xs">AI Site Audit</h3>
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">{analysisData.aiSiteAudit?.adaptiveResilienceScore || 0}/100</span>
+                </div>
                 {renderSubMetrics(analysisData.aiSiteAudit?.subMetrics)}
                 <div className="text-gray-300 leading-relaxed">
                   {typeof analysisData.aiSiteAudit === 'object' && analysisData.aiSiteAudit !== null ? (
@@ -361,7 +524,10 @@ export default function Home() {
               </div>
 
               <div className="bg-white/5 border border-white/10 rounded-2xl p-5 border-l-4 border-l-orange-500">
-                <h3 className="text-orange-400 font-bold uppercase tracking-wider text-xs mb-3">Suitable Facilities</h3>
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-orange-400 font-bold uppercase tracking-wider text-xs">Suitable Facilities</h3>
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded bg-orange-500/20 text-orange-400">{analysisData.suitableFacilities?.adaptiveResilienceScore || 0}/100</span>
+                </div>
                 {renderSubMetrics(analysisData.suitableFacilities?.subMetrics)}
                 <div className="text-gray-300 leading-relaxed">
                   {typeof analysisData.suitableFacilities === 'object' && analysisData.suitableFacilities !== null ? (
@@ -372,24 +538,10 @@ export default function Home() {
                 </div>
               </div>
 
-              {analysisData.userSuggestion && (
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-5 border-l-4 border-l-green-500">
-                  <h3 className="text-green-400 font-bold uppercase tracking-wider text-xs mb-3 flex items-center gap-2">
-                    User Suggestion (Within 10km)
-                  </h3>
-                  {renderSubMetrics(analysisData.userSuggestion?.subMetrics)}
-                  <div className="text-gray-300 leading-relaxed">
-                    {typeof analysisData.userSuggestion === 'object' ? (
-                      <>{renderFormattedText(analysisData.userSuggestion.narrative || analysisData.userSuggestion)}</>
-                    ) : (
-                      <>{renderFormattedText(analysisData.userSuggestion)}</>
-                    )}
-                  </div>
-                </div>
-              )}
+
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
 
       {/* History Modal */}
@@ -426,7 +578,7 @@ export default function Home() {
       )}
 
       <div className="absolute bottom-4 left-4 z-10 pointer-events-none text-xs text-white/30 font-medium">
-        CivicSense Concept &copy; 2026
+        Zonify Concept &copy; 2026
       </div>
     </main>
   );

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Activity, MapPin, TrendingUp, LogIn, LogOut, Image as ImageIcon } from 'lucide-react';
+import { Map as MapIcon, MapPin, TrendingUp, LogIn, LogOut, Image as ImageIcon, Activity } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getImageSrc } from '@/lib/utils';
 
@@ -46,11 +46,10 @@ export default function Dashboard({ isAnalysisMode = false, onStartAnalysis, onS
                 <div>
                     <div className="flex items-center gap-3 mb-2">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center shadow-lg shadow-purple-500/30">
-                            <Activity className="text-white w-5 h-5" />
+                            <MapIcon className="text-white w-5 h-5" />
                         </div>
                         <div>
-                            <h1 className="text-2xl font-bold font-outfit tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400">CivicSense</h1>
-                            <p className="text-white/50 text-xs font-medium uppercase tracking-wider">Entrepreneur Dashboard</p>
+                            <h1 className="text-2xl font-bold font-outfit tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400">Zonify</h1>
                         </div>
                     </div>
                     <p className="text-white/70 text-sm mt-3 leading-relaxed">
@@ -99,7 +98,6 @@ export default function Dashboard({ isAnalysisMode = false, onStartAnalysis, onS
                         <TrendingUp className="w-3.5 h-3.5 text-purple-400" />
                         Recent Suggestions
                     </h2>
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                 </div>
 
                 <div className="space-y-3 overflow-y-auto custom-scrollbar pr-1 max-h-[30vh]">
@@ -145,9 +143,6 @@ export default function Dashboard({ isAnalysisMode = false, onStartAnalysis, onS
                                         <div className="flex-1 min-w-0">
                                             <div className="flex justify-between items-start mb-1">
                                                 <span className="text-[11px] font-black text-blue-300 truncate uppercase tracking-tight">{pin.businessType}</span>
-                                                <div className={`text-[8px] font-black px-1.5 py-0.5 rounded-md shrink-0 ml-2 ${pin.saturationIndex > 5 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
-                                                    {pin.saturationIndex?.toFixed(1) || 'N/A'}
-                                                </div>
                                             </div>
                                             <p className="text-[10px] text-gray-500 line-clamp-2 leading-tight italic">"{pin.review}"</p>
                                         </div>
@@ -169,7 +164,7 @@ export default function Dashboard({ isAnalysisMode = false, onStartAnalysis, onS
                 <div className="flex justify-between items-center">
                     <h2 className="text-xs font-black text-white/90 flex items-center gap-2 uppercase tracking-[0.2em]">
                         <Activity className={`w-3.5 h-3.5 ${isAnalysisMode ? 'text-yellow-400 animate-pulse' : 'text-purple-400'}`} />
-                        Analysis Mode
+                        Strategic Opportunity Insights
                     </h2>
                     <div className="flex items-center gap-2">
                         {hasHistory && (
@@ -188,8 +183,8 @@ export default function Dashboard({ isAnalysisMode = false, onStartAnalysis, onS
 
                 <p className="text-[11px] text-white/50 leading-relaxed">
                     {isAnalysisMode
-                        ? "AI is currently identifying high-potential zones and analyzing community sentiment gaps."
-                        : "Enable analysis to discover optimal locations for new urban development and business ventures."}
+                        ? "AI is currently identifying high-potential zones and analyzing Public Demand Analysis gaps."
+                        : "Enable Strategic Opportunity Insights to discover optimal locations for new urban development and business ventures."}
                 </p>
 
                 <button

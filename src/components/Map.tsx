@@ -145,12 +145,15 @@ function MapSearch({ onPlaceSelect }: { onPlaceSelect: (place: google.maps.place
 
 interface MapProps {
     isAnalysisMode?: boolean;
+    isAnalyzing?: boolean;
+    analysisLocation?: { lat: number, lng: number } | null;
     onStartAnalysis?: (active: boolean) => void;
     onSelectPin?: any;
     onRunAnalysis?: (location: { lat: number; lng: number; }, nearbyPins: any[], placeName: string) => void;
+    onGalleryClose?: () => void;
 }
 
-export default function Map({ isAnalysisMode = false, onStartAnalysis, onSelectPin, onRunAnalysis }: MapProps) {
+export default function Map({ isAnalysisMode = false, isAnalyzing = false, analysisLocation = null, onStartAnalysis, onSelectPin, onRunAnalysis }: MapProps) {
     return (
         <APIProvider
             apiKey={(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY && !process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.includes('Dummy')) ? process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY : ''}
@@ -158,6 +161,8 @@ export default function Map({ isAnalysisMode = false, onStartAnalysis, onSelectP
         >
             <MapInner
                 isAnalysisMode={isAnalysisMode}
+                isAnalyzing={isAnalyzing}
+                analysisLocation={analysisLocation}
                 onStartAnalysis={onStartAnalysis}
                 onSelectPin={onSelectPin}
                 onRunAnalysis={onRunAnalysis}
@@ -166,7 +171,7 @@ export default function Map({ isAnalysisMode = false, onStartAnalysis, onSelectP
     );
 }
 
-function MapInner({ isAnalysisMode, onStartAnalysis, onSelectPin: onSelectPinFromParent, onRunAnalysis }: MapProps) {
+function MapInner({ isAnalysisMode, isAnalyzing, analysisLocation, onStartAnalysis, onSelectPin: onSelectPinFromParent, onRunAnalysis, onGalleryClose }: MapProps) {
     const [pins, setPins] = useState<RenovationPin[]>([]);
     const [tempPin, setTempPin] = useState<{ lat: number, lng: number } | null>(null);
     const [pendingPin, setPendingPin] = useState<{ lat: number, lng: number } | null>(null);
@@ -195,6 +200,8 @@ function MapInner({ isAnalysisMode, onStartAnalysis, onSelectPin: onSelectPinFro
             console.log("[CivicSense] Map and Places Library are ready.");
         }
     }, [map, placesLib]);
+
+
 
     const handleAiResponse = (action: any) => {
         if (action.map_action === "MOVE_TO" && action.coordinates) {
@@ -296,10 +303,11 @@ function MapInner({ isAnalysisMode, onStartAnalysis, onSelectPin: onSelectPinFro
                     const isOk = (status as any) === 'OK' || (status as any) === (placesLib as any).PlacesServiceStatus.OK;
                     if (isOk && results && results.length > 0) {
                         setSelectedPlaceName(results[0].name || "New Development");
-                    } else if (gResults?.[0]) {
-                        setSelectedPlaceName(gResults[0].formatted_address.split(',')[0]);
+                    } else if (gResults?.[0]?.formatted_address) {
+                        // Fallback to the full formatted address
+                        setSelectedPlaceName(gResults[0].formatted_address);
                     } else {
-                        setSelectedPlaceName(`Location: ${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`);
+                        setSelectedPlaceName(`Coordinates: ${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`);
                     }
                 });
             });
@@ -392,14 +400,16 @@ function MapInner({ isAnalysisMode, onStartAnalysis, onSelectPin: onSelectPinFro
             const targetLat = match ? match.lat : Number(pin.lat);
             const targetLng = match ? match.lng : Number(pin.lng);
 
-            setMapData({ lat: targetLat, lng: targetLng, zoom: 18 });
-            map.panTo({ lat: targetLat, lng: targetLng });
-            map.setZoom(18);
+            if (selectedLocation?.lat !== targetLat || selectedLocation?.lng !== targetLng) {
+                setMapData({ lat: targetLat, lng: targetLng, zoom: 18 });
+                map.panTo({ lat: targetLat, lng: targetLng });
+                map.setZoom(18);
 
-            setSelectedIdeaId(pin.id);
-            setSelectedLocation({ lat: targetLat, lng: targetLng });
+                setSelectedIdeaId(pin.id);
+                setSelectedLocation({ lat: targetLat, lng: targetLng });
+            }
         }
-    }, [onSelectPinFromParent, map, groupedPins]);
+    }, [onSelectPinFromParent, map, groupedPins, selectedLocation]);
 
     return (
         <div className="w-full h-full relative" id="civic-map-container">
@@ -506,6 +516,10 @@ function MapInner({ isAnalysisMode, onStartAnalysis, onSelectPin: onSelectPinFro
                     </AdvancedMarker>
                 ))}
 
+                {isAnalyzing && analysisLocation && (
+                    <AnalysisCircle center={analysisLocation} radius={10000} />
+                )}
+
                 {pendingPin && (
                     <AdvancedMarker position={pendingPin} zIndex={50}>
                         <motion.div
@@ -520,7 +534,7 @@ function MapInner({ isAnalysisMode, onStartAnalysis, onSelectPin: onSelectPinFro
                                 </span>
                             </div>
                             <div className="flex flex-col">
-                                <span className="text-white text-sm font-bold leading-tight">
+                                <span className="text-white text-sm font-bold leading-tight line-clamp-2">
                                     {selectedPlaceName || "New Opportunity"}
                                 </span>
                                 <span className="text-white/40 text-[9px] mt-0.5">
@@ -529,6 +543,7 @@ function MapInner({ isAnalysisMode, onStartAnalysis, onSelectPin: onSelectPinFro
                             </div>
                             <div className="flex w-full mt-1">
                                 <button
+                                    disabled={selectedPlaceName === "Detecting location..."}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         if (isAnalysisMode && onRunAnalysis) {
@@ -543,9 +558,9 @@ function MapInner({ isAnalysisMode, onStartAnalysis, onSelectPin: onSelectPinFro
                                         }
                                         setPendingPin(null);
                                     }}
-                                    className={`w-full text-white text-[10px] font-black py-2.5 rounded-xl transition-all shadow-lg uppercase tracking-widest border border-white/10 ${isAnalysisMode ? 'bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500' : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500'}`}
+                                    className={`w-full text-white text-[10px] font-black py-2.5 rounded-xl transition-all shadow-lg uppercase tracking-widest border border-white/10 ${selectedPlaceName === "Detecting location..." ? 'opacity-50 cursor-not-allowed bg-gray-600' : isAnalysisMode ? 'bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500' : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500'}`}
                                 >
-                                    {isAnalysisMode ? 'Run Deep Scan' : 'Confirm Spot'}
+                                    {selectedPlaceName === "Detecting location..." ? 'Loading...' : isAnalysisMode ? 'Run Deep Scan' : 'Confirm Spot'}
                                 </button>
                             </div>
                         </motion.div>
@@ -606,36 +621,86 @@ function MapInner({ isAnalysisMode, onStartAnalysis, onSelectPin: onSelectPinFro
                 refiningIdea={refiningIdea}
             />
 
-            <IdeaGallery
-                isOpen={!!selectedLocation}
-                onClose={() => {
-                    setSelectedLocation(null);
-                    setSelectedIdeaId(null);
-                }}
-                location={selectedLocation}
-                ideas={activeIdeasForLocation}
-                onIdeaUpdated={fetchPins}
-                initialIdeaId={selectedIdeaId}
-                onAddDetails={(idea) => {
-                    setRefiningIdea(idea);
-                    setTempPin({ lat: idea.lat, lng: idea.lng });
-                    setSelectedLocation(null);
-                    setSelectedPlaceName(idea.businessType);
-                }}
-                onAddNewIdea={() => {
-                    if (!user) {
-                        loginWithGoogle();
-                        return;
-                    }
-                    if (selectedLocation) {
-                        setTempPin(selectedLocation);
-                    }
-                    setRefiningIdea(null);
-                    setSelectedLocation(null);
-                    setSelectedIdeaId(null);
-                    setSelectedPlaceName(null);
-                }}
-            />
+            <AnimatePresence>
+                {selectedLocation && (
+                    <IdeaGallery
+                        isOpen={true}
+                        onClose={() => {
+                            setSelectedLocation(null);
+                            setSelectedIdeaId(null);
+                            onGalleryClose?.();
+                        }}
+                        location={selectedLocation}
+                        ideas={activeIdeasForLocation}
+                        onIdeaUpdated={fetchPins}
+                        initialIdeaId={selectedIdeaId}
+                        onAddDetails={(idea) => {
+                            setRefiningIdea(idea);
+                            setTempPin({ lat: idea.lat, lng: idea.lng });
+                            setSelectedLocation(null);
+                            setSelectedPlaceName(idea.businessType);
+                        }}
+                        onAddNewIdea={() => {
+                            if (!user) {
+                                loginWithGoogle();
+                                return;
+                            }
+                            if (selectedLocation) {
+                                setTempPin(selectedLocation);
+                            }
+                            setRefiningIdea(null);
+                            setSelectedLocation(null);
+                            setSelectedIdeaId(null);
+                            setSelectedPlaceName(null);
+                        }}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
+}
+
+// Custom component to render a Google Maps Circle
+function AnalysisCircle({ center, radius }: { center: { lat: number, lng: number }, radius: number }) {
+    const map = useMap('main-map');
+    const [circle, setCircle] = useState<google.maps.Circle | null>(null);
+
+    useEffect(() => {
+        if (!map) return;
+
+        const newCircle = new google.maps.Circle({
+            strokeColor: '#eab308',
+            strokeOpacity: 0.8,
+            strokeWeight: 2,
+            fillColor: '#eab308',
+            fillOpacity: 0.15,
+            map,
+            center,
+            radius,
+            clickable: false,
+            zIndex: 10
+        });
+
+        setCircle(newCircle);
+
+        // Optional pulse effect by slowly transitioning the radius and opacity
+        let animationFrame: number;
+        let p = 0;
+        const animate = () => {
+            p += 0.05;
+            const extraRadius = Math.sin(p) * 200; // pulse by +/- 200m
+            const opacity = 0.15 + (Math.sin(p) * 0.05);
+            newCircle.setRadius(radius + extraRadius);
+            newCircle.setOptions({ fillOpacity: opacity });
+            animationFrame = requestAnimationFrame(animate);
+        };
+        animationFrame = requestAnimationFrame(animate);
+
+        return () => {
+            cancelAnimationFrame(animationFrame);
+            newCircle.setMap(null);
+        };
+    }, [map, center, radius]);
+
+    return null;
 }

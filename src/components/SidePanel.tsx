@@ -53,7 +53,7 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
             const isInitial = messages.length === 0;
             const isScanning = messages.length === 1 && messages[0].text.includes("scanning");
 
-            if (isInitial || isScanning || status === 'VALIDATED' || isDifferentLocation || status === 'REJECTED') {
+            if (isInitial || isScanning || status === 'VALIDATED' || isDifferentLocation || status === 'REJECTED' || refiningIdea) {
                 const isRealName = placeName && placeName !== "Detecting location...";
                 let greeting = isRealName
                     ? `Hi! I see you're interested in **${placeName}**. What's your vision for this location?`
@@ -63,9 +63,9 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                     greeting = `Hi! You are adding details to the existing proposal **${refiningIdea.businessType}**. What new changes or details would you like to add?`;
                 }
 
-                // Only update if the greeting actually changes or location changed
-                if (isInitial || (isRealName && isScanning) || isDifferentLocation) {
-                    if (isDifferentLocation) {
+                // Only update if the greeting actually changes or location changed or refining started
+                if (isInitial || (isRealName && isScanning) || isDifferentLocation || refiningIdea) {
+                    if (isDifferentLocation || (refiningIdea && status === 'VALIDATED')) {
                         setMessages([]);
                         setStatus('DRAFT');
                         setFeasibility(null);
@@ -75,7 +75,14 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                         setSiteAnalysis(null);
                         setInput('');
                     }
-                    setMessages(prev => [...(isDifferentLocation ? [] : prev), { role: 'model', text: greeting }]);
+
+                    // If we just reset, add the greeting. If not, don't duplicate it.
+                    setMessages(prev => {
+                        if (isDifferentLocation || refiningIdea) {
+                            return [{ role: 'model', text: greeting }];
+                        }
+                        return [...prev, { role: 'model', text: greeting }];
+                    });
                 }
             }
         }
@@ -84,7 +91,7 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
             setLoading(false);
             setShowBreakdown(false);
         }
-    }, [isOpen, placeName]);
+    }, [isOpen, placeName, refiningIdea]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -215,23 +222,23 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
 
                     const commentPayload = {
                         placeId: linkedPlaceId,
-                        placeName: action.idea_title || placeName || "CivicSense Proposal",
+                        placeName: action.idea_title || placeName || "Zonify Proposal",
                         text: action.idea_description || userText || null,
                         author: user?.displayName || "Civic User",
                         likes: 0,
                         imageStatus: finalVisionImage ? 'done' : 'failed',
                         imageBase64: finalVisionImage || null,
                         timestamp: new Date(),
-                        source: 'CivicSense'
+                        source: 'Zonify'
                     };
 
                     const placePayload = {
-                        name: action.idea_title || placeName || "CivicSense Proposal",
+                        name: action.idea_title || placeName || "Zonify Proposal",
                         address: placeName || "Civic Location",
                         latitude: location.lat || null,
                         longitude: location.lng || null,
                         lastUpdated: new Date(),
-                        isCivicSense: true
+                        isZonify: true
                     };
 
                     console.log("[SidePanel] Payload generated, starting Firestore inserts...");
@@ -343,7 +350,7 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                                 initial={{ height: 0, opacity: 0 }}
                                 animate={{ height: 'auto', opacity: 1 }}
                                 exit={{ height: 0, opacity: 0 }}
-                                className="bg-purple-900/40 border-b border-purple-500/30 overflow-hidden"
+                                className="bg-purple-900/40 border-b border-purple-500/30 overflow-y-auto max-h-64"
                             >
                                 <div className="p-4 space-y-3">
                                     <div className="flex justify-between items-center text-[10px] font-bold text-purple-200 uppercase tracking-widest mb-1">
@@ -351,21 +358,25 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                                         <span>{feasibility}/100</span>
                                     </div>
                                     {[
-                                        { label: 'Urban Fit', val: breakdown.urban_fit },
-                                        { label: 'Sustainability', val: breakdown.sustainability },
-                                        { label: 'Safety', val: breakdown.safety },
-                                        { label: 'Accessibility', val: breakdown.accessibility },
-                                        { label: 'Practicality', val: breakdown.practicality },
+                                        { label: 'Urban Fit', val: breakdown.urban_fit, max: 10 },
+                                        { label: 'Sustainability', val: breakdown.sustainability, max: 10 },
+                                        { label: 'Safety', val: breakdown.safety, max: 10 },
+                                        { label: 'Accessibility', val: breakdown.accessibility, max: 10 },
+                                        { label: 'Practicality', val: breakdown.practicality, max: 10 },
+                                        { label: 'Community Demand', val: breakdown.community_demand, max: 20 },
+                                        { label: 'Market Viability', val: breakdown.market_viability, max: 10 },
+                                        { label: 'AI Feasibility', val: breakdown.ai_feasibility, max: 10 },
+                                        { label: 'SDG Impact', val: breakdown.sdg_impact, max: 10 },
                                     ].map((item, i) => (
                                         <div key={i} className="space-y-1">
                                             <div className="flex justify-between text-[10px] text-gray-300">
                                                 <span>{item.label}</span>
-                                                <span className="font-mono">{item.val}/10</span>
+                                                <span className="font-mono">{item.val}/{item.max}</span>
                                             </div>
                                             <div className="h-1 bg-black/40 rounded-full overflow-hidden">
                                                 <motion.div
                                                     initial={{ width: 0 }}
-                                                    animate={{ width: `${(item.val / 10) * 100}%` }}
+                                                    animate={{ width: `${(item.val / item.max) * 100}%` }}
                                                     transition={{ delay: i * 0.1, duration: 1, ease: "easeOut" }}
                                                     className="h-full bg-gradient-to-r from-purple-500 to-blue-500"
                                                 />

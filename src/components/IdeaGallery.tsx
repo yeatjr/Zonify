@@ -42,43 +42,45 @@ interface IdeaGalleryProps {
     initialIdeaId?: string | null;
 }
 
+type ExpandedView = {
+    baseIdeaId: string;
+    mode: 'HISTORY' | 'BRANCHES';
+    expandedBranchKey: string | null;
+} | null;
+
 export default function IdeaGallery({ isOpen, onClose, location, ideas, onIdeaUpdated, onAddDetails, onAddNewIdea, initialIdeaId }: IdeaGalleryProps) {
-    const [pageIndex, setPageIndex] = useState(0);
-    const [viewingEvolutionsForId, setViewingEvolutionsForId] = useState<string | null>(null);
-    const [selectedEvolutionIndices, setSelectedEvolutionIndices] = useState<Record<string, number>>({});
+    const scrollRef = React.useRef<HTMLDivElement>(null);
+    const [expandedView, setExpandedView] = useState<ExpandedView>(null);
     const [upvotingIdeaId, setUpvotingIdeaId] = useState<string | null>(null);
     const { user, loginWithGoogle } = useAuth();
-    const itemsPerPage = 3;
 
     // Sort ideas by agreementCount descending
     const sortedIdeas = [...ideas].sort((a, b) => (b.agreementCount || 0) - (a.agreementCount || 0));
     const mainIdeas = sortedIdeas.filter(i => !i.parentIdeaId);
-    const totalPages = Math.ceil(mainIdeas.length / itemsPerPage);
-
-    // Initial navigation effect
     React.useEffect(() => {
-        if (isOpen && initialIdeaId) {
-            const targetIdea = sortedIdeas.find(i => i.id === initialIdeaId);
-            if (targetIdea) {
-                const parentId = targetIdea.parentIdeaId || targetIdea.id;
-                setViewingEvolutionsForId(parentId);
-                const parentIndex = mainIdeas.findIndex(i => i.id === parentId);
-                if (parentIndex !== -1) {
-                    setPageIndex(Math.floor(parentIndex / itemsPerPage));
-                }
+        if (isOpen && initialIdeaId && ideas.length > 0) {
+            const idea = ideas.find(i => i.id === initialIdeaId);
+            if (idea) {
+                const baseId = idea.parentIdeaId || idea.id;
+                setExpandedView({ baseIdeaId: baseId, mode: 'BRANCHES', expandedBranchKey: null });
             }
         } else if (isOpen) {
             // Reset state when opening a new pin
-            setViewingEvolutionsForId(null);
-            setPageIndex(0);
+            setExpandedView(null);
+            setUpvotingIdeaId(null);
         }
     }, [isOpen, initialIdeaId, mainIdeas.length]);
 
     // Safety check
-    if (!isOpen || mainIdeas.length === 0) return null;
+    if (mainIdeas.length === 0) return null;
 
-    const handleNext = () => setPageIndex(p => Math.min(totalPages - 1, p + 1));
-    const handlePrev = () => setPageIndex(p => Math.max(0, p - 1));
+    const handleNext = () => {
+        if (scrollRef.current) scrollRef.current.scrollBy({ left: 360, behavior: 'smooth' });
+    };
+
+    const handlePrev = () => {
+        if (scrollRef.current) scrollRef.current.scrollBy({ left: -360, behavior: 'smooth' });
+    };
 
     const handleAgree = async (ideaId: string) => {
         if (!user) {
@@ -121,30 +123,33 @@ export default function IdeaGallery({ isOpen, onClose, location, ideas, onIdeaUp
             if (sortedIdeas.length <= 1) {
                 onClose();
             } else {
-                setViewingEvolutionsForId(null);
-                setPageIndex(0);
+                setExpandedView(null);
             }
         } catch (error) {
             console.error("Error deleting idea:", error);
         }
     };
 
-    const activeMainIdeas = viewingEvolutionsForId
-        ? [mainIdeas.find(i => i.id === viewingEvolutionsForId)!].filter(Boolean)
-        : mainIdeas.slice(pageIndex * itemsPerPage, pageIndex * itemsPerPage + itemsPerPage);
+    const activeMainIdeas = expandedView
+        ? [mainIdeas.find(i => i.id === expandedView.baseIdeaId)!].filter(Boolean)
+        : mainIdeas;
 
     return (
-        <AnimatePresence>
-            <div className="absolute inset-0 pointer-events-none z-[120] p-4">
-                {/* Backdrop overlay */}
-                <motion.div
-                    key="gallery-backdrop"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    onClick={onClose}
-                    className="absolute inset-0 bg-black/50 backdrop-blur-md pointer-events-auto"
-                />
+        <div className="absolute inset-0 pointer-events-none z-[500] p-4">
+            {/* Backdrop overlay */}
+            <motion.div
+                key="gallery-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onClose();
+                }}
+                className="absolute inset-0 bg-black/60 backdrop-blur-xl pointer-events-auto"
+            />
+
+
 
                 {/* Floating Modal Container */}
                 <motion.div
@@ -153,6 +158,29 @@ export default function IdeaGallery({ isOpen, onClose, location, ideas, onIdeaUp
                     exit={{ opacity: 0, scale: 0.85, y: 20 }}
                     className="absolute z-[130] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl pointer-events-auto flex flex-col origin-center"
                 >
+                    {/* Floating Navigation Arrows */}
+                    {mainIdeas.length > 1 && (
+                        <>
+                            <motion.button
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -20 }}
+                                onClick={handlePrev}
+                                className="absolute -left-20 top-1/2 -translate-y-1/2 z-[140] p-4 bg-black/60 hover:bg-black/90 backdrop-blur-xl border border-white/20 rounded-full text-white/60 hover:text-white transition-all shadow-[0_0_40px_rgba(0,0,0,0.5)] pointer-events-auto group hidden xl:flex"
+                            >
+                                <ChevronLeft className="w-8 h-8 group-hover:-translate-x-1 transition-transform duration-300" />
+                            </motion.button>
+                            <motion.button
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: 20 }}
+                                onClick={handleNext}
+                                className="absolute -right-20 top-1/2 -translate-y-1/2 z-[140] p-4 bg-black/60 hover:bg-black/90 backdrop-blur-xl border border-white/20 rounded-full text-white/60 hover:text-white transition-all shadow-[0_0_40px_rgba(0,0,0,0.5)] pointer-events-auto group hidden xl:flex"
+                            >
+                                <ChevronRight className="w-8 h-8 group-hover:translate-x-1 transition-transform duration-300" />
+                            </motion.button>
+                        </>
+                    )}
                     {/* Header */}
                     <div className="flex justify-between items-center p-5 mb-4 bg-black/80 backdrop-blur-3xl border border-white/20 rounded-2xl shadow-2xl">
                         <div className="flex items-center gap-3">
@@ -169,13 +197,19 @@ export default function IdeaGallery({ isOpen, onClose, location, ideas, onIdeaUp
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
-                            {viewingEvolutionsForId ? (
+                            {expandedView ? (
                                 <button
-                                    onClick={() => setViewingEvolutionsForId(null)}
+                                    onClick={() => {
+                                        if (expandedView.expandedBranchKey) {
+                                            setExpandedView({ ...expandedView, expandedBranchKey: null });
+                                        } else {
+                                            setExpandedView(null);
+                                        }
+                                    }}
                                     className="flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-[10px] font-black text-white uppercase transition-all border border-white/20"
                                 >
                                     <ChevronLeft className="w-3 h-3" />
-                                    Back to Grid
+                                    {expandedView.expandedBranchKey ? 'Back to Branches' : 'Back to Grid'}
                                 </button>
                             ) : (
                                 <>
@@ -188,60 +222,66 @@ export default function IdeaGallery({ isOpen, onClose, location, ideas, onIdeaUp
                                             New Idea Here
                                         </button>
                                     )}
-                                    {totalPages > 1 && (
-                                        <div className="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-xl border border-white/10">
-                                            <button
-                                                onClick={handlePrev}
-                                                disabled={pageIndex === 0}
-                                                className="p-1 hover:bg-white/10 disabled:opacity-30 rounded-lg transition-colors text-white/60 hover:text-white"
-                                            >
-                                                <ChevronLeft className="w-4 h-4" />
-                                            </button>
-                                            <span className="text-[10px] font-black text-white/90">{pageIndex + 1} / {totalPages}</span>
-                                            <button
-                                                onClick={handleNext}
-                                                disabled={pageIndex === totalPages - 1}
-                                                className="p-1 hover:bg-white/10 disabled:opacity-30 rounded-lg transition-colors text-white/60 hover:text-white"
-                                            >
-                                                <ChevronRight className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    )}
                                 </>
                             )}
-                            <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors group">
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onClose();
+                                }}
+                                className="p-2 hover:bg-white/10 rounded-full transition-colors group relative z-50 pointer-events-auto"
+                            >
                                 <X className="w-6 h-6 text-gray-400 group-hover:text-white group-hover:rotate-90 transition-all duration-300" />
                             </button>
                         </div>
                     </div>
 
                     {/* Content Row: Grid View or Version History Focus */}
-                    <div className="flex gap-6 overflow-x-auto custom-scrollbar pb-8 px-2 -mx-2 items-start transition-all duration-500">
+                    <div
+                        ref={scrollRef}
+                        style={{ maskImage: 'linear-gradient(to right, transparent, black 1%, black 99%, transparent)' }}
+                        className="flex gap-6 overflow-x-auto pb-8 px-2 -mx-2 items-start transition-all duration-500 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                    >
                         {activeMainIdeas.map(currentIdea => {
-                            const refinementIdeas = sortedIdeas.filter(i => i.parentIdeaId === currentIdea.id);
-                            const sortedRefinements = [...refinementIdeas].sort((a, b) => {
+                            const getDescendants = (rootId: string, all: Idea[]) => {
+                                const result: Idea[] = [];
+                                let currentLevel = all.filter(i => i.parentIdeaId === rootId);
+                                while (currentLevel.length > 0) {
+                                    result.push(...currentLevel);
+                                    let nextLevel: Idea[] = [];
+                                    currentLevel.forEach(c => nextLevel.push(...all.filter(i => i.parentIdeaId === c.id)));
+                                    currentLevel = nextLevel;
+                                }
+                                return result;
+                            };
+
+                            const treeIdeas = [currentIdea, ...getDescendants(currentIdea.id, sortedIdeas)].sort((a, b) => {
                                 const timeA = a.createdAt?.toMillis?.() || a.createdAt?.seconds || 0;
                                 const timeB = b.createdAt?.toMillis?.() || b.createdAt?.seconds || 0;
                                 return timeA - timeB;
                             });
 
-                            const allEvolutions = [currentIdea, ...sortedRefinements];
+                            const authorGroups = new Map<string, Idea[]>();
+                            treeIdeas.forEach(idea => {
+                                const authorKey = idea.userId || idea.author || 'Anonymous';
+                                if (!authorGroups.has(authorKey)) authorGroups.set(authorKey, []);
+                                authorGroups.get(authorKey)!.push(idea);
+                            });
 
-                            // 1. Find the latest evolution by the ORIGINAL AUTHOR to pin as the Main Card
-                            const authorRefinements = allEvolutions.filter(r =>
-                                (r.userId && currentIdea.userId && r.userId === currentIdea.userId) ||
-                                (r.author && currentIdea.author && r.author === currentIdea.author)
-                            );
+                            const mainAuthorKey = currentIdea.userId || currentIdea.author || 'Anonymous';
+                            const mainAuthorEvolutions = authorGroups.get(mainAuthorKey) || [currentIdea];
 
-                            const latestIdea = authorRefinements.length > 0
-                                ? authorRefinements[authorRefinements.length - 1]
-                                : currentIdea;
+                            const latestIdea = mainAuthorEvolutions[mainAuthorEvolutions.length - 1];
+                            const mainHistoryIdeas = mainAuthorEvolutions.slice(0, -1).reverse();
 
-                            const displayIdeaIndex = allEvolutions.findIndex(i => i.id === latestIdea.id);
+                            const communityBranches = Array.from(authorGroups.entries())
+                                .filter(([key, _]) => key !== mainAuthorKey)
+                                .map(([key, evols]) => ({
+                                    authorKey: key,
+                                    latestIdea: evols[evols.length - 1],
+                                    historyIdeas: evols.slice(0, -1).reverse()
+                                }));
 
-                            // 2. Everything else (old author proposals + community forks) goes to the history board
-                            const historyIdeas = allEvolutions.filter(i => i.id !== latestIdea.id);
-                            const totalEvolutions = allEvolutions.length;
                             const isLatestOwner = !!(user && (latestIdea.userId === user.uid || latestIdea.author === user.displayName));
 
                             return (
@@ -251,34 +291,38 @@ export default function IdeaGallery({ isOpen, onClose, location, ideas, onIdeaUp
                                         key={`main-${latestIdea.id}`}
                                         initial={{ x: 20, opacity: 0 }}
                                         animate={{ x: 0, opacity: 1 }}
-                                        className="min-w-[340px] w-[340px] bg-black/80 backdrop-blur-3xl border border-white/20 rounded-[32px] shadow-[0_25px_80px_rgba(0,0,0,0.6)] p-6 shrink-0 z-10"
+                                        className="min-w-[340px] w-[340px] flex flex-col bg-black/80 backdrop-blur-3xl border border-white/20 rounded-[32px] p-6 shrink-0 z-10"
                                     >
-                                        <div className="flex flex-col gap-5">
+                                        <div className="flex flex-col gap-5 flex-1">
                                             <div className="space-y-1">
                                                 <div className="flex items-center gap-2 mb-1 justify-between">
                                                     <div className="flex items-center gap-2">
                                                         <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
                                                         <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest">
-                                                            {displayIdeaIndex === 0 ? "Initial Proposal" : `Evolution ${displayIdeaIndex}`}
+                                                            {mainAuthorEvolutions.length === 1 ? "Initial Proposal" : `Evolution ${mainAuthorEvolutions.length}`}
                                                         </span>
                                                     </div>
 
-                                                    {historyIdeas.length > 0 && !viewingEvolutionsForId && (
+                                                    {!expandedView && (
                                                         <div className="flex items-center gap-1.5">
-                                                            <button
-                                                                onClick={() => setViewingEvolutionsForId(currentIdea.id)}
-                                                                className="flex items-center justify-center p-1.5 rounded-lg bg-white/5 border border-white/10 text-white/50 hover:bg-white/10 hover:text-white transition-all shadow-sm"
-                                                                title="View Community Evolutions"
-                                                            >
-                                                                <History className="w-3.5 h-3.5" />
-                                                            </button>
+                                                            {mainHistoryIdeas.length > 0 && (
+                                                                <button
+                                                                    onClick={() => setExpandedView({ baseIdeaId: currentIdea.id, mode: 'HISTORY', expandedBranchKey: null })}
+                                                                    className="flex items-center justify-center p-1.5 rounded-lg bg-white/5 border border-white/10 text-white/50 hover:bg-white/10 hover:text-white transition-all shadow-sm"
+                                                                    title="View Your Revision History"
+                                                                >
+                                                                    <History className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            )}
 
-                                                            <button
-                                                                onClick={() => setViewingEvolutionsForId(currentIdea.id)}
-                                                                className="flex items-center px-2 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-[9px] font-black text-purple-300 uppercase tracking-widest hover:bg-purple-500/20 transition-all shadow-sm"
-                                                            >
-                                                                {historyIdeas.length} Community {historyIdeas.length === 1 ? 'Branch' : 'Branches'}
-                                                            </button>
+                                                            {communityBranches.length > 0 && (
+                                                                <button
+                                                                    onClick={() => setExpandedView({ baseIdeaId: currentIdea.id, mode: 'BRANCHES', expandedBranchKey: null })}
+                                                                    className="flex items-center px-2 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-[9px] font-black text-purple-300 uppercase tracking-widest hover:bg-purple-500/20 transition-all shadow-sm"
+                                                                >
+                                                                    {communityBranches.length} Community {communityBranches.length === 1 ? 'Branch' : 'Branches'}
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
@@ -305,37 +349,13 @@ export default function IdeaGallery({ isOpen, onClose, location, ideas, onIdeaUp
                                                     </div>
                                                 )}
                                                 <div className="absolute top-3 right-3 bg-purple-600/90 backdrop-blur-md px-2 py-1 rounded-lg text-[8px] font-black text-white border border-white/20">
-                                                    {displayIdeaIndex === 0 ? "RENDER v1" : `RENDER v${displayIdeaIndex + 1}`}
+                                                    {mainAuthorEvolutions.length === 1 ? "RENDER v1" : `RENDER v${mainAuthorEvolutions.length}`}
                                                 </div>
                                             </div>
 
                                             <div className="bg-white/5 p-4 rounded-2xl border border-white/5 leading-relaxed h-[130px] overflow-y-auto custom-scrollbar">
                                                 <p className="text-[13px] text-gray-300 italic">"{latestIdea.review}"</p>
                                             </div>
-
-                                            {/* Analysis Section - Added back */}
-                                            {(latestIdea.analysis?.envAnalysis || latestIdea.analysis?.satelliteAnalysis) && (
-                                                <div className="bg-purple-500/5 border border-purple-500/10 rounded-2xl p-4 space-y-3">
-                                                    <div className="flex items-center gap-2 text-[10px] font-black text-purple-300 uppercase tracking-widest">
-                                                        <Activity className="w-3.5 h-3.5" />
-                                                        Site Analysis
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        {latestIdea.analysis.envAnalysis && (
-                                                            <div className="text-[11px] text-gray-400 leading-relaxed">
-                                                                <span className="text-purple-300/60 font-bold uppercase text-[9px] block mb-0.5">Street Vision:</span>
-                                                                {latestIdea.analysis.envAnalysis}
-                                                            </div>
-                                                        )}
-                                                        {latestIdea.analysis.satelliteAnalysis && (
-                                                            <div className="text-[11px] text-gray-400 leading-relaxed">
-                                                                <span className="text-blue-300/60 font-bold uppercase text-[9px] block mb-0.5">Satellite Context:</span>
-                                                                {latestIdea.analysis.satelliteAnalysis}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )}
 
                                             <div className="flex items-center justify-between gap-3">
                                                 {isLatestOwner ? (
@@ -401,10 +421,10 @@ export default function IdeaGallery({ isOpen, onClose, location, ideas, onIdeaUp
                                         </div>
                                     </motion.div>
 
-                                    {/* 2. Version History Evolutions */}
+                                    {/* 2. Version Histories & Community Branches */}
                                     <AnimatePresence>
-                                        {viewingEvolutionsForId === currentIdea.id && historyIdeas.map((child, idx) => {
-                                            const childIndex = allEvolutions.findIndex(i => i.id === child.id);
+                                        {/* A. RENDER MAIN HISTORY */}
+                                        {expandedView?.baseIdeaId === currentIdea.id && expandedView.mode === 'HISTORY' && mainHistoryIdeas.map((child, idx) => {
                                             const isChildOwner = !!(user && (child.userId === user.uid || child.author === user.displayName));
                                             return (
                                                 <motion.div
@@ -412,15 +432,15 @@ export default function IdeaGallery({ isOpen, onClose, location, ideas, onIdeaUp
                                                     initial={{ x: -20, opacity: 0, width: 0 }}
                                                     animate={{ x: 0, opacity: 1, width: 300 }}
                                                     exit={{ x: -20, opacity: 0, width: 0 }}
-                                                    transition={{ duration: 0.3, delay: (historyIdeas.length - 1 - idx) * 0.05 }}
-                                                    className="min-w-[300px] w-[300px] bg-black/60 backdrop-blur-2xl border border-white/10 rounded-[28px] shadow-[0_20px_60px_rgba(0,0,0,0.4)] p-5 shrink-0 hover:bg-black/80 transition-colors overflow-hidden flex flex-col"
+                                                    transition={{ duration: 0.3, delay: idx * 0.05 }}
+                                                    className="min-w-[300px] w-[300px] bg-black/60 backdrop-blur-2xl border border-white/10 rounded-[28px] p-5 shrink-0 hover:bg-black/80 transition-colors overflow-hidden flex flex-col"
                                                 >
                                                     <div className="flex flex-col gap-4 flex-1">
                                                         <div className="flex justify-between items-start">
                                                             <div className="flex items-center gap-1.5 pr-2 opacity-60">
                                                                 <History className="w-3 h-3 text-gray-400" />
                                                                 <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
-                                                                    {childIndex === 0 ? "Initial Proposal" : `Evolution ${childIndex}`}
+                                                                    {idx === mainHistoryIdeas.length - 1 ? "Initial Proposal" : `Draft ${mainHistoryIdeas.length - idx}`}
                                                                 </span>
                                                             </div>
                                                             <div className="text-[8px] font-bold text-white/20 uppercase bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
@@ -452,7 +472,7 @@ export default function IdeaGallery({ isOpen, onClose, location, ideas, onIdeaUp
                                                             {isChildOwner ? (
                                                                 <div
                                                                     title="You cannot vote on your own proposal"
-                                                                    className="flex items-center justify-center gap-2 text-[9px] font-black text-white/10 cursor-not-allowed"
+                                                                    className="flex items-center justify-center gap-2 text-[9px] font-black text-white/10 cursor-not-allowed uppercase w-full py-2 rounded-lg"
                                                                 >
                                                                     <ThumbsUp className="w-3 h-3" />
                                                                     AGREE ({child.agreementCount || 0})
@@ -468,7 +488,7 @@ export default function IdeaGallery({ isOpen, onClose, location, ideas, onIdeaUp
                                                             ) : (
                                                                 <button
                                                                     onClick={() => handleAgree(child.id)}
-                                                                    className="flex items-center justify-center gap-2 text-[9px] font-black text-white/40 hover:text-purple-400 transition-colors bg-white/5 hover:bg-white/10 w-full py-2 rounded-lg uppercase"
+                                                                    className="flex items-center justify-center gap-2 text-[9px] font-black text-gray-400 hover:text-white hover:bg-white/10 transition-colors border border-white/10 w-full py-2 rounded-lg uppercase"
                                                                 >
                                                                     <ThumbsUp className="w-3 h-3" />
                                                                     AGREE ({child.agreementCount || 0})
@@ -477,7 +497,115 @@ export default function IdeaGallery({ isOpen, onClose, location, ideas, onIdeaUp
                                                         </div>
                                                     </div>
                                                 </motion.div>
-                                            );
+                                            )
+                                        })}
+
+                                        {/* B. RENDER COMMUNITY BRANCHES + BRANCH HISTORY */}
+                                        {expandedView?.baseIdeaId === currentIdea.id && expandedView.mode === 'BRANCHES' && communityBranches.map((branch, idx) => {
+                                            if (expandedView.expandedBranchKey && expandedView.expandedBranchKey !== branch.authorKey) return null;
+
+                                            const renderCardNode = (child: Idea, isBranchHead: boolean, subIdx: number) => {
+                                                const isChildOwner = !!(user && (child.userId === user.uid || child.author === user.displayName));
+                                                return (
+                                                    <motion.div
+                                                        key={`branch-${child.id}`}
+                                                        initial={{ x: -20, opacity: 0, width: 0 }}
+                                                        animate={{ x: 0, opacity: 1, width: isBranchHead ? 340 : 300 }}
+                                                        exit={{ x: -20, opacity: 0, width: 0 }}
+                                                        transition={{ duration: 0.3, delay: subIdx * 0.05 }}
+                                                        className={`${isBranchHead ? "min-w-[340px] w-[340px] bg-gradient-to-b from-purple-900/40 to-black/60" : "min-w-[300px] w-[300px] bg-black/60 grayscale"} backdrop-blur-2xl border ${isBranchHead ? "border-purple-500/30" : "border-white/10"} rounded-[28px] p-5 shrink-0 hover:bg-black/80 hover:grayscale-0 transition-all overflow-hidden flex flex-col`}
+                                                    >
+                                                        <div className="flex flex-col gap-4 flex-1">
+                                                            <div className="flex justify-between items-start">
+                                                                <div className="flex items-center gap-1.5 pr-2 opacity-60">
+                                                                    <div className={`w-2 h-2 rounded-full ${isBranchHead ? 'bg-purple-400 animate-pulse' : 'bg-gray-500'}`} />
+                                                                    <span className={`text-[9px] font-black uppercase tracking-widest ${isBranchHead ? 'text-purple-400' : 'text-gray-400'}`}>
+                                                                        {isBranchHead ? "Community Fork" : `Fork Draft ${branch.historyIdeas.length - subIdx}`}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    {isBranchHead && branch.historyIdeas.length > 0 && !expandedView.expandedBranchKey && (
+                                                                        <button
+                                                                            onClick={() => setExpandedView({ ...expandedView, expandedBranchKey: branch.authorKey })}
+                                                                            className="flex items-center gap-1.5 px-2 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-[9px] font-black text-white/60 transition-colors border border-white/10"
+                                                                        >
+                                                                            <History className="w-3 h-3" />
+                                                                            {branch.historyIdeas.length} Edits
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <h3 className={`${isBranchHead ? 'text-xl' : 'text-sm'} font-black text-white leading-tight tracking-tight`}>{child.businessType}</h3>
+
+                                                            <div className="relative aspect-[4/3] w-full min-h-[120px] max-h-[160px] flex-shrink rounded-2xl overflow-hidden border border-white/5 bg-black/40 transition-all duration-300">
+                                                                {child.visionImage && (
+                                                                    <img src={getImageSrc(child.visionImage)} alt="Evolution" className="w-full h-full object-cover" />
+                                                                )}
+                                                                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2 px-1">
+                                                                <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${isBranchHead ? 'bg-purple-500/20 border-purple-500/20' : 'bg-gray-500/20 border-gray-500/20'}`}>
+                                                                    <User className={`w-2.5 h-2.5 ${isBranchHead ? 'text-purple-300' : 'text-gray-300'}`} />
+                                                                </div>
+                                                                <span className="text-[10px] font-bold text-gray-400 truncate">{child.author || 'Anonymous'}</span>
+                                                            </div>
+
+                                                            <div className="max-h-32 overflow-y-auto custom-scrollbar bg-white/[0.02] p-3 rounded-xl border border-white/5">
+                                                                <p className="text-[12px] text-gray-500 leading-relaxed italic">
+                                                                    "{child.review}"
+                                                                </p>
+                                                            </div>
+
+                                                            <div className="mt-auto border-t border-white/5 pt-4">
+                                                                <div className="flex gap-2">
+                                                                    {isChildOwner ? (
+                                                                        <div
+                                                                            title="You cannot vote on your own proposal"
+                                                                            className="flex-1 flex items-center justify-center gap-2 text-[9px] font-black text-white/10 cursor-not-allowed uppercase border border-white/5 py-2 rounded-lg"
+                                                                        >
+                                                                            <ThumbsUp className="w-3 h-3" />
+                                                                            AGREE ({child.agreementCount || 0})
+                                                                        </div>
+                                                                    ) : user && child.agreedUsers?.includes(user.uid) ? (
+                                                                        <button
+                                                                            onClick={() => handleAgree(child.id)}
+                                                                            className="flex-1 flex items-center justify-center gap-2 text-[9px] font-black text-purple-400 hover:text-purple-300 hover:bg-purple-500/20 transition-colors bg-purple-500/10 border border-purple-500/20 py-2 rounded-lg uppercase"
+                                                                        >
+                                                                            <ThumbsUp className="w-3 h-3" />
+                                                                            AGREED ({child.agreementCount || 0})
+                                                                        </button>
+                                                                    ) : (
+                                                                        <button
+                                                                            onClick={() => handleAgree(child.id)}
+                                                                            className="flex-1 flex items-center justify-center gap-2 text-[9px] font-black text-gray-400 hover:text-white hover:bg-white/10 transition-colors border border-white/10 py-2 rounded-lg uppercase"
+                                                                        >
+                                                                            <ThumbsUp className="w-3 h-3" />
+                                                                            AGREE ({child.agreementCount || 0})
+                                                                        </button>
+                                                                    )}
+
+                                                                    {isBranchHead && onAddDetails && (
+                                                                        <button
+                                                                            onClick={() => onAddDetails(child)}
+                                                                            className="flex-1 py-2 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg text-[9px] font-black text-white shadow-lg hover:scale-105 active:scale-95 transition-all uppercase tracking-wider border border-white/20"
+                                                                        >
+                                                                            Refine
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </motion.div>
+                                                )
+                                            }
+
+                                            return (
+                                                <React.Fragment key={`branch-tree-${branch.authorKey}`}>
+                                                    {renderCardNode(branch.latestIdea, true, idx)}
+                                                    {expandedView.expandedBranchKey === branch.authorKey && branch.historyIdeas.map((h, hIdx) => renderCardNode(h, false, hIdx))}
+                                                </React.Fragment>
+                                            )
                                         })}
                                     </AnimatePresence>
                                 </React.Fragment>
@@ -485,15 +613,23 @@ export default function IdeaGallery({ isOpen, onClose, location, ideas, onIdeaUp
                         })}
 
                         {/* Placeholder for "No Refinements yet" if reading evolutions */}
-                        {viewingEvolutionsForId && activeMainIdeas.length === 1 && sortedIdeas.filter(i => i.parentIdeaId === activeMainIdeas[0].id).length === 0 && (
+                        {expandedView?.mode === 'BRANCHES' && activeMainIdeas.length === 1 && sortedIdeas.filter(i => i.parentIdeaId === activeMainIdeas[0].id).length === 0 && (
                             <div className="min-w-[300px] h-[400px] rounded-[28px] border-2 border-dashed border-white/5 flex flex-col items-center justify-center opacity-20 px-8 text-center grayscale">
-                                <Bot className="w-10 h-10 mb-3" />
-                                <p className="text-[10px] font-black uppercase tracking-widest">Waiting for community evolutions</p>
+                                <Activity className="w-10 h-10 mb-4" />
+                                <h4 className="text-xl font-black uppercase tracking-widest text-white mb-2">No Branches</h4>
+                                <p className="text-sm font-bold text-gray-400">Be the first to propose a community fork!</p>
+                            </div>
+                        )}
+
+                        {expandedView?.mode === 'HISTORY' && activeMainIdeas.length === 1 && sortedIdeas.filter(i => i.parentIdeaId === activeMainIdeas[0].id).length === 0 && (
+                            <div className="min-w-[300px] h-[400px] rounded-[28px] border-2 border-dashed border-white/5 flex flex-col items-center justify-center opacity-20 px-8 text-center grayscale">
+                                <Activity className="w-10 h-10 mb-4" />
+                                <h4 className="text-xl font-black uppercase tracking-widest text-white mb-2">Initial Draft</h4>
+                                <p className="text-sm font-bold text-gray-400">This is the very first version of this idea.</p>
                             </div>
                         )}
                     </div>
                 </motion.div>
             </div>
-        </AnimatePresence>
     );
 }

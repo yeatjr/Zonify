@@ -16,18 +16,22 @@ export async function POST(req: Request) {
             systemInstructionExtra = "\n\nCRITICAL DIRECTIVE: The user has forcefully finalized the proposal. You MUST immediately set the `status` to \"VALIDATED\" and `map_action` to \"SHOW_3D_SIMULATION\". Do not ask any more questions. You MUST provide a concise `idea_title` summarizing their proposal, and an `idea_description` outlining the constraints and features they requested based on the chat history.";
         }
 
-        const systemInstruction = `Role: You are the "CommonZone Urban Planning Auditor." Your primary mission is to evaluate urban projects using a structured 5-pillar rubric.
+        const systemInstruction = `Role: You are the "Zonify Urban Planning Auditor." Your primary mission is to evaluate urban projects using a merged 9-factor rubric.
 
-The 5-Pillar Scoring Rubric (10 points each, Total 50):
-1. **Urban Fit**: Does it match the district's character and architectural language?
-2. **Sustainability**: Is it eco-friendly, energy efficient, or reducing carbon footprint?
-3. **Safety**: Does it improve public safety, lighting, or reduce pedestrian risks?
-4. **Accessibility**: Is it inclusive (ADA/Universal Design) and easy to reach?
-5. **Practicality**: Is the business model viable, realistic, and filling a market gap?
+The 9-Factor Scoring Rubric (Total 100):
+1. **Urban Fit** (10 pts): Matches district character and architectural language.
+2. **Sustainability** (10 pts): Eco-friendly, energy efficient, or low carbon footprint.
+3. **Safety** (10 pts): Improves public safety, lighting, or reduces risks.
+4. **Accessibility** (10 pts): Inclusive design (Universal Access) and ease of reach.
+5. **Practicality** (10 pts): Viable business model and realistic execution.
+6. **Community Demand** (20 pts): High sentiment and alignment with community needs.
+7. **Market Viability** (10 pts): Low competition and high economic potential.
+8. **AI Feasibility** (10 pts): Realism concerning zoning and technical constraints.
+9. **SDG Impact** (10 pts): Environmental and social inclusivity score.
 
 The Filter Logic:
 1. Rejection: If an idea is physically impossible, harmful, or satirical, set status to "REJECTED".
-2. Evaluation: Gather info until you can provide a detailed score across all pillars. Ask ONE targeted question at a time to verify these pillars.
+2. Evaluation: Gather info until you can provide a detailed score across all factors. Ask ONE targeted question at a time.
 
 Output Format (Strict JSON Control):
 Every response must include a JSON block at the very end of your text response:
@@ -35,13 +39,17 @@ Every response must include a JSON block at the very end of your text response:
 {
   "map_action": "MOVE_TO" | "SHOW_PINS" | "SHOW_3D_SIMULATION" | "NONE",
   "coordinates": { "lat": number, "lng": number },
-  "feasibility_score": number (0-50 based on pillars), 
+  "feasibility_score": number (0-100 total sum), 
   "scoring_breakdown": {
      "urban_fit": number (0-10),
      "sustainability": number (0-10),
      "safety": number (0-10),
      "accessibility": number (0-10),
-     "practicality": number (0-10)
+     "practicality": number (0-10),
+     "community_demand": number (0-20),
+     "market_viability": number (0-10),
+     "ai_feasibility": number (0-10),
+     "sdg_impact": number (0-10)
   },
   "status": "DRAFT" | "VALIDATED" | "REJECTED",
   "idea_title": string | null,
@@ -52,11 +60,12 @@ Every response must include a JSON block at the very end of your text response:
 
 Notes: 
 - Use "DRAFT" while gathering info.
-- Use "VALIDATED" ONLY when you approve the idea (Total Score >= 40/50).
+- Use "VALIDATED" ONLY when you approve the idea (Total Score >= 75/100).
 - Current active location: ${placeName || "Unknown"} at coordinates ${JSON.stringify(location)}
 ${refiningIdea ? `- REFINING CONTEXT: The user is refining an existing community idea titled "${refiningIdea.businessType}". Merge new details conceptually.` : ''}
 ${systemInstructionExtra}
 `;
+
 
         // Generate history for the chat
         let history: any[] = [];
@@ -144,10 +153,7 @@ ${systemInstructionExtra}
         if (jsonMatch && jsonMatch[1]) {
             try {
                 actionPayload = JSON.parse(jsonMatch[1]);
-                // If the AI provided a breakdown but feasibility_score is still based on 50, normalize to 100
-                if (actionPayload.scoring_breakdown && actionPayload.feasibility_score <= 50) {
-                    actionPayload.feasibility_score = actionPayload.feasibility_score * 2;
-                }
+
             } catch (e) {
                 console.error("[CivicSense API] JSON Parse Error:", e);
             }
