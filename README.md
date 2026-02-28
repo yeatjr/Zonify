@@ -22,10 +22,24 @@ The reasoning and structuring engine powered by **Google Gemini** and is respons
 * **Functions:** Requirement extraction, contextual interpretation, feasibility triage, and structured template generation.
 
 ### 1.3 Data and Collaboration Layer
-A real-time backend ensuring data integrity and traceability.
-* **Services:** Firebase (Cloud Firestore & Authentication).
-* **Persistence Strategy:** Validated "pitched" ideas and visual renderings are stored as **Base64 data URLs** directly within Firestore (Pins and Comments collections).
-* **PDF Reports:** "Deep Analysis" reports are saved as physical files on the server’s local filesystem rather than as Base64 strings.
+- Supported by **Firebase** services
+* Cloud Firestore - Stores structured proposal records, maintains version history and supports real-time map pin storage
+* Firebase Authentication - Manages user identity, handles role differentiation and provides secure sign-in
+- Security rules restrict editing access to authorized users to ensures traceability, authorship recognition, and data integrity
+- 
+**Data Persistence Strategy**
+*  Validated “pitched” ideas use **Base64 data URLs**
+*  Base64 strings stored directly in:
+  - Pins collection
+  - Comments collection in Firestore
+* Proposal data and visual pitch saved together in a single database write
+
+**PDF Report Handling**
+* “Deep Analysis” PDF reports are not stored as Base64
+* When downloaded, reports are saved as physical files on the server’s local filesystem
+* Separate handling from Firestore-based pitch storage
+
+Together, these layers allow community ideas to move from informal thoughts to structured, collaborative proposal drafts.
 
 ---
 
@@ -56,11 +70,17 @@ Performs a 10km search using the **Google Places API** and existing pins in **Fi
 
 $$d = 2r \arcsin\left(\sqrt{\sin^2\left(\frac{\phi_2 - \phi_1}{2}\right) + \cos(\phi_1) \cos(\phi_2) \sin^2\left(\frac{\lambda_2 - \lambda_1}{2}\right)}\right)$$
 
+Then, it generates Three Pillars Analysis which is:
+* Planning Feasibility
+* AI Site Audit
+* Suitable Facilities
+
 ### 2.3 AI Vision & Map Engine
-It performs multi-modal context injection by combining:
-1.  User Text + Base64 Street View images.
-2.  Base64 Satellite images.
-3.  Internal Place Scene Maps and Categorized Backgrounds (Business, Civic, Nature, etc.).
+Uses Gemini 2.0 Flash Experimental Image Generation by integrating:
+* Satellite imagery
+* Street View imagery
+* User idea text
+Then Utilizes internal library of  Place Scene Maps and Categorized Backgrounds (Business, Civic, Nature, etc.).
 
 ---
 
