@@ -57,7 +57,7 @@ const compressBase64 = async (base64: string, maxWidth = 800): Promise<string> =
     });
 };
 
-export default function SidePanel({ isOpen, onCancel: onClose, location, placeName, onAiAction, refiningIdea, onSuccess }: SidePanelProps) {
+export default function SidePanel({ isOpen, onCancel, location, placeName, onAiAction, refiningIdea, onSuccess }: SidePanelProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
