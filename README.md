@@ -1,92 +1,102 @@
-# 🌆 Zonify
+# Zonify 🏙️
 
-**Zonify** is an AI-powered co-design platform that bridges the gap between informal community ideas and structured urban planning. By leveraging the **Google Maps Platform** and **Gemini AI**, it transforms unstructured community input into data-driven, visually rendered architectural proposals.
+**Zonify** is an AI-powered urban planning collaborator that bridges the gap between community ideas and formal development. By combining the **Google Maps Platform** with **Google Gemini AI**, it transforms unstructured user input into professional-grade, structured architectural proposals.
 
 ---
 
-## 🏗️ 1. Technical Architecture
+## 1. Technical Architecture
 
-Zonify operates on a modular three-tier architecture designed to move ideas from "thought" to "draft" with high spatial accuracy.
-
-
+Zonify is built on a modular three-tier architecture designed for spatial accuracy, reasoning depth, and real-time collaboration.
 
 ### 1.1 Interaction Layer (Frontend)
-Built for accessibility, allowing non-technical users to engage with formal planning tools.
-* **Platform:** Google Maps JavaScript API.
-* **Integrations:** Google Places API (Context) and Google Static Maps API (Visuals).
-* **Capabilities:** Real-world location selection, Street View immersion, and guided idea submission.
+The user-facing map interface designed for accessibility by non-technical users.
+* **Platform:** Google Maps Platform
+* **APIs:** Google Maps JavaScript, Google Places, and Google Static Maps.
+* **Capabilities:** Real-world location selection, Street View immersion, and guided input forms for informal planning terminology.
 
 ### 1.2 Intelligence Layer (AI)
-The "Reasoning Engine" that structures unstructured human creativity.
-* **AI Chat (Gemini 2.5 Flash):** Acts as the **Urban Planning Auditor**. It handles requirement extraction, feasibility triage, and analytical reasoning.
-* **AI Vision (Gemini 2.0 Flash Experimental):** Generates architectural simulations and visual concept renderings by blending user text with satellite and Street View imagery.
+The reasoning and structuring engine powered by **Google Gemini**.
+* **AI (Chat):** Powered by **Gemini 2.5 Flash**. Implements the *Urban Planning Auditor* logic for evaluation, scoring, and analytical reasoning.
+* **AI (Vision):** Powered by **Gemini 2.0 Flash Experimental**. Generates architectural simulations and visual concept renderings.
+* **Functions:** Requirement extraction, contextual interpretation, feasibility triage, and structured template generation.
 
-### 1.3 Data & Collaboration Layer
-Powered by **Firebase** for real-time synchronization and secure data integrity.
-* **Cloud Firestore:** Real-time storage for map pins, proposals, and version history.
-* **Firebase Authentication:** Role-based access and identity management.
-* **Persistence Strategy:** Validated "pitches" utilize Base64 data URLs stored directly in Firestore for atomic, single-write database operations.
+### 1.3 Data and Collaboration Layer
+A real-time backend ensuring data integrity and traceability.
+* **Services:** Firebase (Cloud Firestore & Authentication).
+* **Persistence Strategy:** * Validated "pitched" ideas and visual renderings are stored as **Base64 data URLs** directly within Firestore (Pins and Comments collections).
+    * Enables single-write transactions for proposal data and visual pitches.
+* **PDF Reports:** "Deep Analysis" reports are saved as physical files on the server’s local filesystem rather than as Base64 strings.
 
 ---
 
-## 🛠️ 2. Key Implementation Details
+## 2. Implementation Details
 
-### 2.1 The "Urban Planning Auditor"
-Zonify uses a stateful chat session to evaluate proposals against a **9-Factor Scoring Rubric**. Proposals are classified into three states: `DRAFT`, `REJECTED`, or `VALIDATED` (Score $\ge 75/100$).
+### 2.1 AI Chat Validation & Deep Location Analysis
+The architecture follows a **Model–View–API** pattern. The system utilizes a stateful chat session to evaluate proposals against a **9-Factor Scoring Rubric**:
 
 | Factor | Description |
 | :--- | :--- |
 | **Urban Fit** | Alignment with neighborhood context. |
-| **Sustainability** | Environmental and SDG 11 impact. |
-| **Safety & Access** | ADA compliance and pedestrian safety. |
-| **Market Viability** | Economic feasibility and demand. |
+| **Sustainability** | Environmental impact and resilience. |
+| **Safety** | Public safety and hazard mitigation. |
+| **Accessibility** | Universal design and transport links. |
+| **Practicality** | Construction and maintenance feasibility. |
+| **Community Demand** | Local need and social impact. |
+| **Market Viability** | Economic feasibility. |
+| **AI Feasibility** | Technical simulation viability. |
+| **SDG Impact** | Alignment with UN Sustainable Development Goals. |
 
-
+**Classification Logic:**
+* `DRAFT`: Information gathering.
+* `REJECTED`: Impossible or harmful.
+* `VALIDATED`: Score $\ge 75/100$.
 
 ### 2.2 Adaptive Resilience Profile (Deep Scan)
-The system performs a 10km "Deep Scan" using the **Google Places API** and the **Haversine formula** to analyze the existing urban fabric:
-$$d = 2r \arcsin\left(\sqrt{\sin^2\left(\frac{\Delta\phi}{2}\right) + \cos \phi_1 \cos \phi_2 \sin^2\left(\frac{\Delta\lambda}{2}\right)}\right)$$
-This data is injected into Gemini to generate a "Three Pillars Analysis": Planning Feasibility, AI Site Audit, and Suitable Facilities.
+Performs a 10km search using the **Google Places API** and existing pins in **Firestore**. It calculates distances using the Haversine formula:
 
-### 2.3 Reporting Engine
-Custom PDF generation via **jsPDF** uses vector-based construction (not screenshots) to produce professional reports. These are stored on the server's local filesystem with links indexed in Firestore.
+$$d = 2r \arcsin\left(\sqrt{\sin^2\left(\frac{\phi_2 - \phi_1}{2}\right) + \cos(\phi_1) \cos(\phi_2) \sin^2\left(\frac{\lambda_2 - \lambda_1}{2}\right)}\right)$$
 
----
-
-## ⚖️ 3. Challenges & Mitigations
-
-### 3.1 Structured Output Consistency
-* **Problem:** Inconsistent JSON formatting from LLM responses during early testing.
-* **Solution:** Implemented **Standardized System Prompts** and **Backend Validation Checks** to enforce strict JSON schemas for dashboard visualization.
-
-### 3.2 Advisory Scope & Ethics
-* **Risk:** Users might interpret AI output as legal or regulatory approval.
-* **Solution:** Strict prompt engineering to maintain an **advisory tone**. Every output is explicitly labeled as a preliminary concept, reinforcing the role of professional planners.
+### 2.3 AI Vision & Map Engine
+The `/api/vision/generate` module performs multi-modal context injection by combining:
+1.  User Text + Base64 Street View images.
+2.  Base64 Satellite images.
+3.  Internal Place Scene Maps and Categorized Backgrounds (Business, Civic, Nature, etc.).
 
 ---
 
-## 🚀 4. Future Roadmap
+## 3. Challenges & Mitigations
 
-### 🏁 Short-Term: Immersive Visualization
-* **Lightweight Layout Editor:** Drag-and-drop benches, lighting, and greenery.
-* **Live 3D Viewport:** Transition from Base64 images to **Three.js** or **Spline** digital twins.
-* **AR Mobile Companion:** Overlay AI-generated visions onto the real world via phone cameras.
+### 3.1 Output Consistency & Data Accuracy
+* **Challenge:** Inconsistent JSON formatting from Gemini during early testing.
+* **Solution:** Standardized system prompts, strict output schemas, and backend validation checks prior to saving.
+* **Accuracy:** Implemented a hierarchical fallback strategy for geographic data: **Place Details → Geocoder → Nearby Search → Raw Coordinates**.
 
-### 🗺️ Mid-Term: Participatory Governance
-* **Civic Reputation System:** Reward high-quality contributors with weighted influence.
-* **"Fund this Vision":** Direct integration with crowdfunding and micro-financing.
+### 3.2 Defining Advisory Scope
+* **Challenge:** Risk of users interpreting AI output as official regulatory approval.
+* **Mitigation:** Engineered instructions to restrict AI tone, explicit labeling of all outputs as "advisory and preliminary," and reinforcing the system's role as a decision-support tool.
+
+---
+
+## 4. Future Roadmap
+
+### 🚀 4.1 Immersive Experience (Short-Term)
+* **Layout Editor:** Arrangement of benches, lighting, and greenery.
+* **3D Viewport:** Integration with **Three.js** or **Spline** for "digital twin" walkthroughs.
+* **AR Mobile:** Overlaying AI visions onto real-world sites via phone cameras.
+
+### 🤝 4.2 Participatory Governance (Mid-Term)
+* **Voting Mechanisms:** Ranking proposals based on community demand signals.
+* **Crowdfunding:** Connecting validated visions to micro-financing platforms.
 * **Squad Mode:** Real-time collaborative co-design sessions.
 
-### 🌍 Long-Term: The Policy Bridge
-* **IoT Integration:** Live traffic, air quality, and noise data impacting the Resilience Score.
-* **Zoning Law API:** Automated checks for setbacks, height limits, and density violations.
-* **Global Engine:** Localizing architectural styles (e.g., Brutalist vs. Vernacular) based on geographic coordinates.
+### 📊 4.3 Institutional Analytics (Long-Term)
+* **Institutional Dashboards:** Filtering proposals for policymakers and sponsors.
+* **IoT Integration:** Real-time data feeds for traffic, air quality, and noise.
+* **Zoning Law API:** Automated compliance checks for height, density, and setback violations.
 
----
-
-**Zonify** transforms the "Not In My Backyard" (NIMBY) sentiment into "Yes, And..." (YIMBY) collaboration. 
-
-> *Disclaimer: Zonify is a decision-support tool, not a professional certification system.*
+### 🌍 4.4 Global Expansion
+* **Architectural Recognition:** Detecting regional styles (Mediterranean, Brutalist, etc.).
+* **Multilingual Support:** Pitching ideas in native languages against global sustainability benchmarks.
 
 ## Getting Started
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
