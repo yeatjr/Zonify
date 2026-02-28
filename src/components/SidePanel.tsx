@@ -313,12 +313,12 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                     animate={{ x: 0, opacity: 1 }}
                     exit={{ x: '100%', opacity: 0 }}
                     transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                    className="absolute top-0 right-0 w-80 md:w-96 h-full z-20 flex flex-col shadow-2xl backdrop-blur-3xl bg-white/90 dark:bg-gray-900/95 border-l border-white/20 dark:border-white/10"
+                    className="absolute top-0 right-0 w-80 md:w-96 h-full z-20 flex flex-col shadow-2xl backdrop-blur-3xl bg-gray-900/90 dark:bg-black/80 border-l border-white/10"
                 >
                     {/* Header */}
-                    <div className="p-5 border-b border-white/10 flex justify-between items-center bg-black/20">
+                    <div className="p-6 border-b border-white/5 flex justify-between items-center bg-black/40">
                         <div className="flex-1 min-w-0 mr-4">
-                            <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-blue-500 font-outfit truncate">
+                            <h2 className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-blue-400 font-outfit uppercase tracking-tighter">
                                 {placeName || "Civic Auditor"}
                             </h2>
                             <div className="flex items-center gap-2 mt-1">
@@ -460,9 +460,9 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
                                     }`}>
                                     {msg.role === 'user' ? <User className="w-4 h-4 text-white" /> : <Bot className="w-4 h-4 text-white" />}
                                 </div>
-                                <div className={`text-sm py-3 px-4 rounded-2xl max-w-[85%] leading-relaxed shadow-sm ${msg.role === 'user'
-                                    ? 'bg-blue-600 text-white rounded-tr-sm'
-                                    : 'bg-white border border-gray-100 dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-gray-100 rounded-tl-sm'
+                                <div className={`text-sm py-3 px-4 rounded-2xl max-w-[85%] leading-relaxed shadow-xl ${msg.role === 'user'
+                                    ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-tr-sm border border-blue-400/30'
+                                    : 'bg-white/5 backdrop-blur-md border border-white/10 text-gray-100 rounded-tl-sm'
                                     }`}>
                                     {msg.text}
                                     {msg.imageBase64 && (
@@ -537,7 +537,7 @@ export default function SidePanel({ isOpen, location, onCancel, onSuccess, onAiA
 
 
                     {/* Input Area */}
-                    <div className="p-4 border-t border-white/10 bg-black/40 flex flex-col gap-2">
+                    <div className="p-6 border-t border-white/5 bg-black/60 flex flex-col gap-3">
                         {status === 'DRAFT' && messages.length > 1 && (
                             <div className="flex gap-2">
                                 <button
