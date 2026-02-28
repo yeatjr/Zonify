@@ -48,7 +48,6 @@ export default function Dashboard({ isAnalysisMode = false, onStartAnalysis, onS
                         <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">The Urban Planning Auditor</span>
                         <div className="flex items-center gap-2">
                             <h1 className="text-3xl font-black font-outfit tracking-tighter text-white">Zonify</h1>
-                            <div className="w-4 h-4 rounded-full bg-white shadow-[0_0_15px_rgba(255,255,255,0.5)] mt-1" />
                         </div>
                     </div>
                     <p className="text-white/70 text-sm mt-3 leading-relaxed">
