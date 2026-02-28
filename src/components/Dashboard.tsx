@@ -41,15 +41,14 @@ export default function Dashboard({ isAnalysisMode = false, onStartAnalysis, onS
             <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="backdrop-blur-xl bg-black/40 border border-white/10 rounded-2xl p-5 shadow-2xl pointer-events-auto flex justify-between items-start shrink-0"
+                className="backdrop-blur-3xl bg-gray-900/90 dark:bg-black/80 border border-white/5 rounded-2xl p-6 shadow-2xl pointer-events-auto flex justify-between items-start shrink-0"
             >
                 <div>
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center shadow-lg shadow-purple-500/30">
-                            <MapIcon className="text-white w-5 h-5" />
-                        </div>
-                        <div>
-                            <h1 className="text-2xl font-bold font-outfit tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400">Zonify</h1>
+                    <div className="flex flex-col mb-2">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">The Urban Planning Auditor</span>
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-3xl font-black font-outfit tracking-tighter text-white">Zonify</h1>
+                            <div className="w-4 h-4 rounded-full bg-white shadow-[0_0_15px_rgba(255,255,255,0.5)] mt-1" />
                         </div>
                     </div>
                     <p className="text-white/70 text-sm mt-3 leading-relaxed">
@@ -91,7 +90,7 @@ export default function Dashboard({ isAnalysisMode = false, onStartAnalysis, onS
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.1 }}
-                className="backdrop-blur-xl bg-black/40 border border-white/10 rounded-2xl p-5 shadow-2xl pointer-events-auto flex flex-col gap-3 min-h-0 overflow-hidden"
+                className="backdrop-blur-3xl bg-gray-900/90 dark:bg-black/80 border border-white/5 rounded-2xl p-6 shadow-2xl pointer-events-auto flex flex-col gap-3 min-h-0 overflow-hidden"
             >
                 <div className="border-b border-white/5 pb-3 flex justify-between items-center">
                     <h2 className="text-xs font-black text-white/90 flex items-center gap-2 uppercase tracking-[0.2em]">
@@ -159,7 +158,7 @@ export default function Dashboard({ isAnalysisMode = false, onStartAnalysis, onS
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.2 }}
-                className={`backdrop-blur-xl bg-black/40 border border-white/10 rounded-2xl p-5 shadow-2xl pointer-events-auto flex flex-col gap-3 shrink-0 ${isAnalysisMode ? 'ring-1 ring-yellow-500/30 border-yellow-500/20' : ''}`}
+                className={`backdrop-blur-3xl bg-gray-900/90 dark:bg-black/80 border border-white/5 rounded-2xl p-6 shadow-2xl pointer-events-auto flex flex-col gap-3 shrink-0 ${isAnalysisMode ? 'ring-1 ring-yellow-500/30 border-yellow-500/20' : ''}`}
             >
                 <div className="flex justify-between items-center">
                     <h2 className="text-xs font-black text-white/90 flex items-center gap-2 uppercase tracking-[0.2em]">
