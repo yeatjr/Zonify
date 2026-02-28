@@ -21,12 +21,10 @@ The reasoning and structuring engine powered by **Google Gemini** and is respons
 * **AI (Vision):** Powered by **Gemini 2.0 Flash Experimental**. Generates architectural simulations and visual concept renderings.
 * **Functions:** Requirement extraction, contextual interpretation, feasibility triage, and structured template generation.
 
-
 ### 1.3 Data and Collaboration Layer
 A real-time backend ensuring data integrity and traceability.
 * **Services:** Firebase (Cloud Firestore & Authentication).
 * **Persistence Strategy:** Validated "pitched" ideas and visual renderings are stored as **Base64 data URLs** directly within Firestore (Pins and Comments collections).
-    * Enables single-write transactions for proposal data and visual pitches.
 * **PDF Reports:** "Deep Analysis" reports are saved as physical files on the server’s local filesystem rather than as Base64 strings.
 
 ---
